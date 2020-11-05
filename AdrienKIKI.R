@@ -38,14 +38,14 @@ alpha=0.05
 #### Basic Bootstrap ####
 B = 5000
 M =1000
-BB_vec_of_T <- rep(NA,)
+BB_vec_of_T <- rep(NA,M)
+T_hat <- (1-(mean(X)+1)^(-1))^3
 #T <- (1-(mu+1)^{-1} )^3
-for (i in 1:M) {
-  Xstar <- sample(X, replace = T)
-  mu_star <- mean(Xstar)
+for (i in 1:B) {
+  Xstar <- sample(X, replace = T) ; mu_star <- mean(Xstar)
   Tstar <- (1-(mu_star+1)^(-1))^3
-  BB_vec_of_T
-}
-
+  BB_vec_of_T[i] <- Tstar
+  }
+CIboot <- c( quantile(BB_vec_of_T, 1-0.05/2), quantile(BB_vec_of_T, 0.05/2)   )
 
 #### PErcentile bootsrap ####
