@@ -1,0 +1,72 @@
+---
+title: "Dev.Book"
+author: "Lamy Lionel, Kinart Adrien"
+---
+
+### Retrieve and format the sample 
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+
+n = 30 
+p = 0.5
+
+sample = as.data.frame(read.csv("../data/sample.csv"))
+sample = sample %>% rename("ID" = X, "obs" = x) %>% arrange(obs)
+
+distribution = table(sample %>% summarize(obs))/n
+
+```
+
+### Comparing Densities
+
+```{r}
+x = seq(0, max(sample$obs), 1)
+ggplot(mapping=aes(x)) +
+  labs(title = "Estimated density vs Real density") +
+  geom_col(aes(y=distribution), width = 0.05)  + 
+  geom_point(aes(y=dgeom(x,p)), colour="blue", shape=1, size=2) +
+  geom_line(aes(y=dgeom(x, p)), colour="blue") + 
+  scale_y_continuous()
+
+```
+
+### Comparing Real CDF and Estimated CDF.
+
+```{r}
+ggplot(mapping=aes(x)) +
+  labs(title="Empirical CDF vs Real CDF", y = "cum.probability") +
+  geom_point(mapping = aes(y=pgeom(x,p)), colour="blue", shape=1, size=2) + 
+  geom_line(mapping = aes(y=pgeom(x,p)), colour="blue") +
+  stat_ecdf(geom="step", pad=F,mapping=aes(x=sample$obs))
+```
+
+### Assymptotically normal
+#### Basic bootstrap
+
+<!-- Not modified (except sample$obs) -->
+```{r}
+alpha = 0.05
+B = 5000
+M =1000
+
+
+
+BB_vec_of_T <- rep(NA,M)
+T_hat <- (1-(mean(sample$obs)+1)^(-1))^3
+#T <- (1-(mu+1)^{-1} )^3
+for (i in 1:B) {
+  Xstar <- sample(sample$obs, replace = T) ; mu_star <- mean(Xstar)
+  Tstar <- (1-(mu_star+1)^(-1))^3
+  BB_vec_of_T[i] <- Tstar
+}
+CIboot <- c(quantile(BB_vec_of_T, 1-0.05/2), quantile(BB_vec_of_T, 0.05/2))
+
+```
+
+
+<!-- 
+The cleanest option, imho, is to handle each task in a specific file (ie. "basic-bootstrap.R")
+and to call it here by typing: source("path_to_file.R")
+-->
