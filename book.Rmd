@@ -3,7 +3,7 @@ title: "Dev.Book"
 author: "Lamy Lionel, Kinart Adrien"
 ---
 
-### Retrieve and format the sample 
+# Retrieve and format the sample 
 
 ```{r message=FALSE, warning=FALSE}
 library(dplyr)
@@ -12,14 +12,14 @@ library(ggplot2)
 n = 30 
 p = 0.5
 
-sample = as.data.frame(read.csv("../data/sample.csv"))
+sample = as.data.frame(read.csv("data/sample.csv"))
 sample = sample %>% rename("ID" = X, "obs" = x) %>% arrange(obs)
 
 distribution = table(sample %>% summarize(obs))/n
 
 ```
-
-### Comparing Densities
+# Data description
+## Comparing Densities
 
 ```{r}
 x = seq(0, max(sample$obs), 1)
@@ -32,7 +32,7 @@ ggplot(mapping=aes(x)) +
 
 ```
 
-### Comparing Real CDF and Estimated CDF.
+## Comparing Real CDF and Estimated CDF.
 
 ```{r}
 ggplot(mapping=aes(x)) +
@@ -41,7 +41,33 @@ ggplot(mapping=aes(x)) +
   geom_line(mapping = aes(y=pgeom(x,p)), colour="blue") +
   stat_ecdf(geom="step", pad=F,mapping=aes(x=sample$obs))
 ```
+## Disitrubtion
+Faire l'équivalent de la figure 1.3. du sylla:
+Pour la normal approximation, on pourrait faire pramatric ou non parametric..
+```{r Figure 3 remake}
+p_true <- c()
+for (i in 1:1000) {
+  Xtrue<-rgeom(n=30, prob=0.5 ) # true distribution
+  cbind(p_true, (mean(Xtrue)+1)^(-1) )
+}
+#Xbar_n1_AN<- rnorm(n=10000000, mean = mu, sd= mu/sqrt(n1)) # AN approximation
 
+p_bootstrap = NA
+for (i in 1:1000) {
+  Xstar <- sample(x=sample, size=30, replace=T)
+  Tstar <- 1/30 * (sum(Xstar>=3))
+  cbind(p_bootstrap, Tstar)
+}
+
+plot(density(p_true), col= 'blue', type="l", main="Densities", lty=1  , xlab="p" )
+lines(density(p_bootstrap), col= 'green', type="l", lty=2)
+legend("topright", legend=c("true", "Bootstrap"), col=c("blue", "green"), lty=1:2, cex=0.8)
+
+```
+
+
+# EStimator quality in the non parametric case 
+## Bias and variance
 ### Assymptotically normal
 #### Basic bootstrap
 
