@@ -11,7 +11,6 @@ library(ggplot2)
 
 n = 30 
 p = 0.5
-
 sample = as.data.frame(read.csv("data/sample.csv"))
 sample = sample %>% rename("ID" = X, "obs" = x) %>% arrange(obs)
 
@@ -19,6 +18,12 @@ distribution = table(sample %>% summarize(obs))/n
 
 ```
 # Data description
+## PArameters of interest
+```{r parameters_of_interest}
+theta_F = (1-p)^3
+theta_Fn = 1 - 1/30 * (sum(sample$obs<=2))
+```
+
 ## Comparing Densities
 
 ```{r}
@@ -42,32 +47,64 @@ ggplot(mapping=aes(x)) +
   stat_ecdf(geom="step", pad=F,mapping=aes(x=sample$obs))
 ```
 ## Disitrubtion
-Faire l'équivalent de la figure 1.3. du sylla:
-Pour la normal approximation, on pourrait faire pramatric ou non parametric..
-```{r Figure 3 remake}
-p_true <- c()
-for (i in 1:1000) {
+Faire l'équivalent de la figure 1.8. du sylla:
+Tout ce qui est possible de mettre: 
+- assumed parametric model (fait)
+- assumed parametric normal approx 
+- assumed paratric bootsrap approx 
+- non parametric normal approx
+- non parametruc bootsrap approx(fait)
+
+```{r }
+nb_sim = 100000
+true_est <- rep(NA, nb_sim)
+for (i in 1:100000) {
   Xtrue<-rgeom(n=30, prob=0.5 ) # true distribution
-  cbind(p_true, (mean(Xtrue)+1)^(-1) )
-}
-#Xbar_n1_AN<- rnorm(n=10000000, mean = mu, sd= mu/sqrt(n1)) # AN approximation
-
-p_bootstrap = NA
-for (i in 1:1000) {
-  Xstar <- sample(x=sample, size=30, replace=T)
-  Tstar <- 1/30 * (sum(Xstar>=3))
-  cbind(p_bootstrap, Tstar)
+  p_true <- (mean(Xtrue)+1)^(-1)
+  true_est[i] = (1-p_true)^3
 }
 
-plot(density(p_true), col= 'blue', type="l", main="Densities", lty=1  , xlab="p" )
-lines(density(p_bootstrap), col= 'green', type="l", lty=2)
-legend("topright", legend=c("true", "Bootstrap"), col=c("blue", "green"), lty=1:2, cex=0.8)
+p_bootstrap = rep(NA,nb_sim)
+for (i in 1:nb_sim) {
+  Xstar <- sample(x=sample$obs, size=30, replace=T)
+  p_bootstrap[i] <- 1 - 1/30 * (sum(Xstar<=2))
+}
+#lines(density(p_bootstrap), col= 'green', type="l", lty=2)
+#legend("topright", legend=c("true", "Bootstrap"), col=c("blue", "green"), lty=1:2, cex=0.8)
+hist(p_bootstrap, probability = T) # Geometric est discrete donc c est normal qu'il y ait des blancs je pense
+lines(density(true_est), col= 'blue', type="l", main="Densities", lty=1  , xlab="p" )
+abline(v=theta_F, col= 'green')
 
 ```
 
 
-# EStimator quality in the non parametric case 
-## Bias and variance
+# EStimator quality in the non parametric case : Bias and variance
+```{r bootstrap_settings}
+B=1000
+```
+## Bias
+```{r Bias estimation via bootstrap}
+first_term_B <-0
+  for (i in 1:B) {
+    set.seed(i)
+    Xstar = sample(x=sample$obs, size=n, replace=T)
+    first_term_B <- first_term_B + (1/B)*( 1 - 1/30 * (sum(Xstar<=2)) )
+  }
+approx_bias <- first_term_B - theta_Fn
+```
+##Variance
+```{r Bias estimation via bootstrap}
+Var_boot <-0
+  for (i in 1:B) {
+    set.seed(i)
+    Xstar = sample(x=sample$obs, size=n, replace=T)
+    first = (1/B)*( 1 - 1/30 * (sum(Xstar<=2)) )^2
+    second = ((1/B)*(1-1/30*(sum(Xstar<=2))))^2 
+    Var_boot <- Var_boot + (first-second)
+  }
+
+```
+
 ### Assymptotically normal
 #### Basic bootstrap
 
