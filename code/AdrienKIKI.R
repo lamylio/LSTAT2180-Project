@@ -2,7 +2,7 @@
 library(readr)
 #library(EnvStats)
 #### Dataset description:  ####
-X <- data.frame(read_csv("Geom_sample.csv"))
+X <- data.frame(read_csv("data/sample.csv"))
 rownames(X) <- X[,1]
 X <- X[,-1]
 X_ordered <- sort(X)

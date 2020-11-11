@@ -21,7 +21,11 @@ distribution = table(sample %>% summarize(obs))/n
 ## PArameters of interest
 ```{r parameters_of_interest}
 theta_F = (1-p)^3
-theta_Fn = 1 - 1/30 * (sum(sample$obs<=2))
+mu_hat = mean(sample$obs)
+p_hat = 1/ (mu_hat+1) 
+T_p = (1-p_hat)^3 # T(X) in the parametric case
+
+T_n = 1 - 1/30 * (sum(sample$obs<=2)) # = T(X) in the non paramatric case 
 ```
 
 ## Comparing Densities
@@ -90,7 +94,7 @@ first_term_B <-0
     Xstar = sample(x=sample$obs, size=n, replace=T)
     first_term_B <- first_term_B + (1/B)*( 1 - 1/30 * (sum(Xstar<=2)) )
   }
-approx_bias <- first_term_B - theta_Fn
+approx_bias <- first_term_B - T_n
 ```
 ##Variance
 ```{r Bias estimation via bootstrap}
@@ -104,31 +108,52 @@ Var_boot <-0
   }
 
 ```
-
+# Confidence intervals
+## Parametric environments:
+Here, we believe in the function distribution of $X$ with a geometric distribution.
 ### Assymptotically normal
-#### Basic bootstrap
-
+#### Basic and percentile bootstrap
 <!-- Not modified (except sample$obs) -->
 ```{r}
 alpha = 0.05
 B = 5000
-M =1000
 
+B_distri_of_T <- rep(NA,B) # constitue la distribution de T(X) dont on va choper les quantiles
 
-
-BB_vec_of_T <- rep(NA,M)
-T_hat <- (1-(mean(sample$obs)+1)^(-1))^3
-#T <- (1-(mu+1)^{-1} )^3
 for (i in 1:B) {
-  Xstar <- sample(sample$obs, replace = T) ; mu_star <- mean(Xstar)
-  Tstar <- (1-(mu_star+1)^(-1))^3
-  BB_vec_of_T[i] <- Tstar
+  Xstar <- rgeom(n=30, prob = p_hat) # on genere ici car on est dans le cas parametrique
+  mu_star <- mean(Xstar)
+  Tstar <- ( 1-(mu_star+1)^(-1) )^3
+  B_distri_of_T[i] <- Tstar
 }
-CIboot <- c(quantile(BB_vec_of_T, 1-0.05/2), quantile(BB_vec_of_T, 0.05/2))
+CI_param_boot <- c(2*T_p - quantile(B_distri_of_T, 1-alpha/2), 2*T_p - quantile(B_distri_of_T, alpha/2))
+CI_percen_boot <- c(quantile(B_distri_of_T, alpha/2), quantile(B_distri_of_T, 1-alpha/2))
 
+hist(B_distri_of_T)
+CI_param_boot
+CI_percen_boot
 ```
+#### Student t bootstrap
+<!-- Not modified (except sample$obs) -->
+```{r}
+alpha = 0.05
+B = 5000
 
+B_distri_of_T <- rep(NA,B) # constitue la distribution de T(X) dont on va choper les quantiles
 
+for (i in 1:B) {
+  Xstar <- rgeom(n=30, prob = p_hat) # on genere ici car on est dans le cas parametrique
+  mu_star <- mean(Xstar)
+  Tstar <- ( 1-(mu_star+1)^(-1) )^3
+  B_distri_of_T[i] <- Tstar
+}
+CI_param_boot <- c(2*T_p - quantile(B_distri_of_T, 1-alpha/2), 2*T_p - quantile(B_distri_of_T, alpha/2))
+CI_percen_boot <- c(quantile(B_distri_of_T, alpha/2), quantile(B_distri_of_T, 1-alpha/2))
+
+hist(B_distri_of_T)
+CI_param_boot
+CI_percen_boot
+```
 <!-- 
 The cleanest option, imho, is to handle each task in a specific file (ie. "basic-bootstrap.R")
 and to call it here by typing: source("path_to_file.R")
