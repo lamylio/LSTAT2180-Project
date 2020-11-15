@@ -108,11 +108,14 @@ Var_boot <-0
   }
 
 ```
+
+
+
 # Confidence intervals
 ## Parametric environments:
 Here, we believe in the function distribution of $X$ with a geometric distribution.
 ### Assymptotically normal
-#### Basic and percentile bootstrap
+### Basic and percentile bootstrap
 <!-- Not modified (except sample$obs) -->
 ```{r}
 alpha = 0.05
@@ -133,27 +136,40 @@ hist(B_distri_of_T)
 CI_param_boot
 CI_percen_boot
 ```
-#### Student t bootstrap
-<!-- Not modified (except sample$obs) -->
+
+
+### Student t bootstrap
+<!-- je me suis inspirer de https://www.textbook.ds100.org/ch/18/hyp_studentized.html -->
 ```{r}
 alpha = 0.05
-B = 5000
+B1 = 5000
+B2=50
 
-B_distri_of_T <- rep(NA,B) # constitue la distribution de T(X) dont on va choper les quantiles
+StB_distri_of_T <- rep(NA,B1) # constitue la distribution de T(X) dont on va choper les quantiles
 
-for (i in 1:B) {
+for (i in 1:B1) {
   Xstar <- rgeom(n=30, prob = p_hat) # on genere ici car on est dans le cas parametrique
   mu_star <- mean(Xstar)
   Tstar <- ( 1-(mu_star+1)^(-1) )^3
-  B_distri_of_T[i] <- Tstar
+  vec_T_star <- rep(NA,B2) # sert uniquement à trouver la standard error de la statistiques bootstrapée
+  for (j in 1:B2) {
+    Xstar_star <- sample(x=Xstar, size= length(Xstar), replace=T)
+    mu_star_star <- mean(Xstar_star)
+    vec_T_star[j] <-  ( 1-(mu_star_star+1)^(-1) )^3
+  }
+  SE_Tstar <- sd(vec_T_star)/sqrt(B2)
+  StB_distri_of_T[i] = (Tstar - mean(vec_T_star))/SE_Tstar
 }
-CI_param_boot <- c(2*T_p - quantile(B_distri_of_T, 1-alpha/2), 2*T_p - quantile(B_distri_of_T, alpha/2))
-CI_percen_boot <- c(quantile(B_distri_of_T, alpha/2), quantile(B_distri_of_T, 1-alpha/2))
-
-hist(B_distri_of_T)
-CI_param_boot
-CI_percen_boot
+SE_theta_hat <- sd(StB_distri_of_T)/sqrt(B1)
+CI_st_B <- c(T_p - quantile(StB_distri_of_T, 0.975)*SE_theta_hat,T_p - quantile(StB_distri_of_T, 0.025)*SE_theta_hat )
+CI_st_B
 ```
+
+
+## Non-arametric environments:
+# Assymptotic 
+
+
 <!-- 
 The cleanest option, imho, is to handle each task in a specific file (ie. "basic-bootstrap.R")
 and to call it here by typing: source("path_to_file.R")
