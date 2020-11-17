@@ -115,6 +115,13 @@ Var_boot <-0
 ## Parametric environments:
 Here, we believe in the function distribution of $X$ with a geometric distribution.
 ### Assymptotically normal
+```{r parametric AN }
+Q1AN <- (2*n*mu_hat +2*n - qchisq(p=0.05, df=1))/(2*n*(mu_hat+1)^2)
+Q2AN <- 1/2 * sqrt(  (4*n*mu_hat^2*qchisq(p=0.05,df=1)+4*n*mu_hat*qchisq(p=0.05,df=1)^2)/(n^2*(mu_hat+1)^4))
+CI_param_AN <- c((1-(Q1AN+Q2AN))^3, (1-(Q1AN-Q2AN))^3)
+CI_param_AN
+```
+
 ### Basic and percentile bootstrap
 <!-- Not modified (except sample$obs) -->
 ```{r}
