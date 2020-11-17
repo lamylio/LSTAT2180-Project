@@ -9,32 +9,45 @@ author: "Lamy Lionel, Kinart Adrien"
 library(dplyr)
 library(ggplot2)
 
-n = 30 
-p = 0.5
+set.seed(112021)
+
 sample = as.data.frame(read.csv("data/sample.csv"))
 sample = sample %>% rename("ID" = X, "obs" = x) %>% arrange(obs)
 
-distribution = table(sample %>% summarize(obs))/n
-
 ```
-# Data description
-## PArameters of interest
-```{r parameters_of_interest}
-theta_F = (1-p)^3
-mu_hat = mean(sample$obs)
-p_hat = 1/ (mu_hat+1) 
-T_p = (1-p_hat)^3 # T(X) in the parametric case
 
-T_n = 1 - 1/30 * (sum(sample$obs<=2)) # = T(X) in the non paramatric case 
+```{r utils}
+T.param = function(obs){return ((1 - (1/(mean(obs)+1)) )^3)}
+T.nonparam = function(obs){return (sum(obs>=3)/length(obs))}
+
+n = 30 
+p = 0.5
+B = 5000
+alpha = 0.05
+```
+
+# Data description
+## Parameters of interest
+```{r parameters_of_interest}
+theta = dgeom(2, p)  # (1-p)^3 == 0.125
+
+sample.mu = mean(sample$obs)
+sample.p = 1/(sample.mu+1)
+
+# Be careful : I used the name theta for the estimator T(X)
+sample.theta.param = T.param(sample$obs)
+sample.theta.nonparam = T.nonparam(sample$obs)
 ```
 
 ## Comparing Densities
 
 ```{r}
+sample.distribution = table(sample %>% summarize(obs))/n
+
 x = seq(0, max(sample$obs), 1)
 ggplot(mapping=aes(x)) +
   labs(title = "Estimated density vs Real density") +
-  geom_col(aes(y=distribution), width = 0.05)  + 
+  geom_col(aes(y=sample.distribution), width = 0.05)  + 
   geom_point(aes(y=dgeom(x,p)), colour="blue", shape=1, size=2) +
   geom_line(aes(y=dgeom(x, p)), colour="blue") + 
   scale_y_continuous()
@@ -50,7 +63,7 @@ ggplot(mapping=aes(x)) +
   geom_line(mapping = aes(y=pgeom(x,p)), colour="blue") +
   stat_ecdf(geom="step", pad=F,mapping=aes(x=sample$obs))
 ```
-## Disitrubtion
+## Distribution
 Faire l'équivalent de la figure 1.8. du sylla:
 Tout ce qui est possible de mettre: 
 - assumed parametric model (fait)
@@ -60,86 +73,121 @@ Tout ce qui est possible de mettre:
 - non parametruc bootsrap approx(fait)
 
 ```{r }
-nb_sim = 100000
-true_est <- rep(NA, nb_sim)
-for (i in 1:100000) {
-  Xtrue<-rgeom(n=30, prob=0.5 ) # true distribution
-  p_true <- (mean(Xtrue)+1)^(-1)
-  true_est[i] = (1-p_true)^3
-}
 
-p_bootstrap = rep(NA,nb_sim)
-for (i in 1:nb_sim) {
-  Xstar <- sample(x=sample$obs, size=30, replace=T)
-  p_bootstrap[i] <- 1 - 1/30 * (sum(Xstar<=2))
-}
-#lines(density(p_bootstrap), col= 'green', type="l", lty=2)
-#legend("topright", legend=c("true", "Bootstrap"), col=c("blue", "green"), lty=1:2, cex=0.8)
-hist(p_bootstrap, probability = T) # Geometric est discrete donc c est normal qu'il y ait des blancs je pense
-lines(density(true_est), col= 'blue', type="l", main="Densities", lty=1  , xlab="p" )
-abline(v=theta_F, col= 'green')
-
+(function(B=100000){
+  
+  geomTheta = rep(NA, B)
+  bootTheta = rep(NA, B)
+  for (i in 1:B){
+    geomSample = rgeom(n, p)
+    geomTheta[i] = T.param(geomSample)  
+    
+    bootSample = sample(sample$obs, n, T)
+    bootTheta[i] = T.nonparam(bootSample)
+  }
+  
+  geomDensity = density(geomTheta)
+  hist(bootTheta, probability = T, xlab = "Theta", main = "Histogram Theta ")
+  lines(dgeom(1:B, p), col = "blue", type="l")
+  abline(v=theta, col="green")
+})()
 ```
 
 
-# EStimator quality in the non parametric case : Bias and variance
-```{r bootstrap_settings}
-B=1000
-```
+# Estimator quality in the non parametric case : Bias and variance
+
+
 ## Bias
-```{r Bias estimation via bootstrap}
-first_term_B <-0
-  for (i in 1:B) {
-    set.seed(i)
-    Xstar = sample(x=sample$obs, size=n, replace=T)
-    first_term_B <- first_term_B + (1/B)*( 1 - 1/30 * (sum(Xstar<=2)) )
+```{r Bias estimation}
+
+bootstrap.bias = (function(B=5000){
+  
+  bootTheta = rep(NA, B)
+  for (i in 1:B){
+    bootSample = sample(sample$obs, n, T)
+    bootTheta[i] = T.nonparam(bootSample)
   }
-approx_bias <- first_term_B - T_n
+  
+  return (mean(bootTheta) - sample.theta.nonparam)
+})()
 ```
-##Variance
-```{r Bias estimation via bootstrap}
-Var_boot <-0
-  for (i in 1:B) {
-    set.seed(i)
-    Xstar = sample(x=sample$obs, size=n, replace=T)
-    first = (1/B)*( 1 - 1/30 * (sum(Xstar<=2)) )^2
-    second = ((1/B)*(1-1/30*(sum(Xstar<=2))))^2 
-    Var_boot <- Var_boot + (first-second)
+## Variance
+```{r Variance estimation}
+
+bootstrap.var = (function(B=5000){
+  
+  bootSquaredTheta = rep(NA, B)
+  bootTheta = rep(NA, B)
+  for (i in 1:B){
+    bootSample = sample(sample$obs, n, T)
+    bootTheta[i] = T.nonparam(bootSample)
+    bootSquaredTheta[i] = bootTheta[i]^2
   }
-
+  
+  bootSquaredTheta = mean(bootSquaredTheta)
+  bootThetaSquared = mean(bootTheta)^2
+  
+  return (bootSquaredTheta - bootThetaSquared)
+  
+})()
 ```
-
-
 
 # Confidence intervals
 ## Parametric environments:
 Here, we believe in the function distribution of $X$ with a geometric distribution.
+
 ### Assymptotically normal
-### Basic and percentile bootstrap
-<!-- Not modified (except sample$obs) -->
-```{r}
-alpha = 0.05
-B = 5000
 
-B_distri_of_T <- rep(NA,B) # constitue la distribution de T(X) dont on va choper les quantiles
-
-for (i in 1:B) {
-  Xstar <- rgeom(n=30, prob = p_hat) # on genere ici car on est dans le cas parametrique
-  mu_star <- mean(Xstar)
-  Tstar <- ( 1-(mu_star+1)^(-1) )^3
-  B_distri_of_T[i] <- Tstar
-}
-CI_param_boot <- c(2*T_p - quantile(B_distri_of_T, 1-alpha/2), 2*T_p - quantile(B_distri_of_T, alpha/2))
-CI_percen_boot <- c(quantile(B_distri_of_T, alpha/2), quantile(B_distri_of_T, 1-alpha/2))
-
-hist(B_distri_of_T)
-CI_param_boot
-CI_percen_boot
+```{r parametric AN }
+CI.param.normal = (function(){
+  
+  Q1 = (2*n*sample.mu + 2*n - qchisq(alpha, 1)) / (2*n * (sample.mu + 1)^2)
+  Q2 = 0.5 * sqrt((4*n * sample.mu^2 * qchisq(alpha, 1) + 4*n*sample.mu * qchisq(alpha, 1)^2) / (n^2*(sample.mu + 1)^4))
+  
+  low = (1-(Q1+Q2))^3
+  upp = (1-(Q1-Q2))^3
+  
+  return (c(low, upp))
+})()
 ```
 
 
+### Basic and percentile bootstrap
+
+```{r CI Parametric boostrap}
+
+boostrap.param = function(B=5000){
+  
+  bootTheta = rep(NA, B)
+  for (i in 1:B){
+    bootSample =  rgeom(n, prob = sample.p)
+    bootTheta[i] = T.param(bootSample)
+  }
+  return (bootTheta)
+}
+
+CI.param = (function(){
+  
+  bootTheta = boostrap.param()
+  quantiles = quantile(bootTheta, c(1-alpha/2, alpha/2))
+  
+  CI.basic = c(2*sample.theta.param - quantiles[1], 2*sample.theta.param - quantiles[2])
+  CI.percent = c(quantiles[2], quantiles[1])
+  
+  return (data.frame("basic"=CI.basic, "percent"=CI.percent))
+})()
+
+CI.param.basic = CI.param$basic
+CI.param.percent = CI.param$percent
+rm(CI.param)
+```
+
+<!-----------------
+        TODO 
+------------------->
+
 ### Student t bootstrap
-<!-- je me suis inspirer de https://www.textbook.ds100.org/ch/18/hyp_studentized.html -->
+<!-- je me suis inspiré de https://www.textbook.ds100.org/ch/18/hyp_studentized.html -->
 ```{r}
 alpha = 0.05
 B1 = 5000
@@ -166,11 +214,27 @@ CI_st_B
 ```
 
 
-## Non-arametric environments:
-# Assymptotic 
+## Non-parametric environments:
+# Basic Bootstrap CI
+
+```{r}
+
+CI.basic = function(){
+  T = rep(NA, B)
+}
+
+B=5000
+CI.basic.T = rep(NA, B)
+for (i in 1:B){
+  CI.basic.resample = sample(sample$obs, 30, T)
+  #CI.basic.resample.mean = mean(CI.basic.resample)
+  CI.basic.T[i] = sum(CI.basic.resample>=3)/30
+}
+
+CI.basic.quantiles = quantile(CI.basic.T, c(alpha/2, 1-alpha/2))
+CI.basic = c(2*T_n - CI.basic.quantiles[2], 2*T_n - CI.basic.quantiles[1])
+CI.basic
+```
 
 
-<!-- 
-The cleanest option, imho, is to handle each task in a specific file (ie. "basic-bootstrap.R")
-and to call it here by typing: source("path_to_file.R")
--->
+
