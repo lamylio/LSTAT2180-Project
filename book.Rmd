@@ -4,7 +4,6 @@ author: "Lamy Lionel, Kinart Adrien"
 ---
 
 # Retrieve and format the sample 
-
 ```{r message=FALSE, warning=FALSE}
 library(dplyr)
 library(ggplot2)
@@ -95,26 +94,21 @@ Tout ce qui est possible de mettre:
 
 
 # Estimator quality in the non parametric case : Bias and variance
-
-
 ## Bias
 ```{r Bias estimation}
-
 bootstrap.bias = (function(B=5000){
-  
   bootTheta = rep(NA, B)
   for (i in 1:B){
     bootSample = sample(sample$obs, n, T)
     bootTheta[i] = T.nonparam(bootSample)
   }
-  
   return (mean(bootTheta) - sample.theta.nonparam)
 })()
 ```
 ## Variance
 ```{r Variance estimation}
 
-bootstrap.var = (function(B=5000){
+bootstrap.var = (function(B=50000){
   
   bootSquaredTheta = rep(NA, B)
   bootTheta = rep(NA, B)
@@ -130,6 +124,7 @@ bootstrap.var = (function(B=5000){
   return (bootSquaredTheta - bootThetaSquared)
   
 })()
+bootstrap.var
 ```
 
 # Confidence intervals
@@ -197,15 +192,33 @@ rm(CI.param)
 ------------------->
 
 ### Student t bootstrap
+```{r}
+alpha = 0.05
+B1 = 5000
+StB_distri_of_T <- rep(NA,B1) # constitue la distribution de T(X) dont on va choper les quantiles
+for (i in 1:B1) {
+  set.seed(i)
+  Xstar <- rgeom(n=30, prob = p_hat) # on genere ici car on est dans le cas parametrique
+  mu_star <- mean(Xstar)
+  Tstar <- ( 1-(mu_star+1)^(-1) )^3
+  StB_distri_of_T[i] = (Tstar - mean(vec_T_star))/SE_Tstar }
+# !!!!!!!! MAUVAIS  !!!!!!!!!!!!!! # !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!
+SE_Tstar <- sd(sample$obs)/sqrt(n) # !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!
+# !!!!!!!! MAUVAIS  !!!!!!!!!!!!!! # !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!
+CI_st_B <- c(T_p - quantile(StB_distri_of_T, 0.975)*SE_Tstar,T_p - quantile(StB_distri_of_T, 0.025)*SE_Tstar )
+CI_st_B
+```
+### Iterated bootstrap
 <!-- je me suis inspiré de https://www.textbook.ds100.org/ch/18/hyp_studentized.html -->
 ```{r}
 alpha = 0.05
 B1 = 5000
 B2=50
 
-StB_distri_of_T <- rep(NA,B1) # constitue la distribution de T(X) dont on va choper les quantiles
+It_StB_distri_of_T <- rep(NA,B1) # constitue la distribution de T(X) dont on va choper les quantiles
 
 for (i in 1:B1) {
+  set.seed(i)
   Xstar <- rgeom(n=30, prob = p_hat) # on genere ici car on est dans le cas parametrique
   mu_star <- mean(Xstar)
   Tstar <- ( 1-(mu_star+1)^(-1) )^3
@@ -216,34 +229,48 @@ for (i in 1:B1) {
     vec_T_star[j] <-  ( 1-(mu_star_star+1)^(-1) )^3
   }
   SE_Tstar <- sd(vec_T_star)/sqrt(B2)
-  StB_distri_of_T[i] = (Tstar - mean(vec_T_star))/SE_Tstar
+  It_StB_distri_of_T[i] = (Tstar - mean(vec_T_star))/SE_Tstar
 }
-SE_theta_hat <- sd(StB_distri_of_T)/sqrt(B1)
-CI_st_B <- c(T_p - quantile(StB_distri_of_T, 0.975)*SE_theta_hat,T_p - quantile(StB_distri_of_T, 0.025)*SE_theta_hat )
-CI_st_B
+It_SE_theta_hat <- sd(It_StB_distri_of_T)/sqrt(B1)
+CI_It_st_B <- c(T_p - quantile(It_StB_distri_of_T, 0.975)*It_SE_theta_hat,T_p - 
+               quantile(It_StB_distri_of_T, 0.025)*It_SE_theta_hat )
+CI_It_st_B
 ```
 
 
 ## Non-parametric environments:
-# Basic Bootstrap CI
+
+### AN np
+```{r}
+CI.np.AN <- c(T.nonparam(sample$obs)-qnorm(0.975)*sqrt(bootstrap.var), # page 42 sylla
+              T.nonparam(sample$obs)+qnorm(0.975)*sqrt(bootstrap.var) )
+CI.np.AN
+```
+
+
+### Basic and percentile Bootstrap CI
 
 ```{r}
 
-CI.basic = function(){
+CI.np.basic = function(){
   T = rep(NA, B)
 }
 
 B=5000
-CI.basic.T = rep(NA, B)
+CI.np.basic.T = rep(NA, B)
 for (i in 1:B){
-  CI.basic.resample = sample(sample$obs, 30, T)
-  #CI.basic.resample.mean = mean(CI.basic.resample)
-  CI.basic.T[i] = sum(CI.basic.resample>=3)/30
-}
+  set.seed(i)
+  CI.np.basic.resample = sample(sample$obs, 30, T)
+  CI.np.basic.T[i] = sum(CI.np.basic.resample>=3)/30 }
 
-CI.basic.quantiles = quantile(CI.basic.T, c(alpha/2, 1-alpha/2))
-CI.basic = c(2*T_n - CI.basic.quantiles[2], 2*T_n - CI.basic.quantiles[1])
-CI.basic
+CI.np.basic.quantiles = quantile(CI.np.basic.T, c(alpha/2, 1-alpha/2))
+
+CI.np.basic = c(2*sample.theta.nonparam - CI.np.basic.quantiles[2], 
+                2*sample.theta.nonparam - CI.np.basic.quantiles[1])
+CI.np.percentil <- CI.np.basic.quantiles
+
+CI.np.basic
+CI.np.percentil
 ```
 
 
