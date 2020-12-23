@@ -28,10 +28,10 @@ alpha = 0.05
 # Data description
 ## Parameters of interest
 ```{r parameters_of_interest}
-theta = dgeom(2, p)  # (1-p)^3 == 0.125
+theta = dgeom(2, p)  # (1-p)^3 == 0.125 # TRUE THETA
 
 sample.mu = mean(sample$obs)
-sample.p = 1/(sample.mu+1)
+sample.p = 1/(sample.mu+1) # /!\ c'est le plug in estimator seulement dans le cas paramtrique !!!!!!! 
 
 # Be careful : I used the name theta for the estimator T(X)
 sample.theta.param = T.param(sample$obs)
@@ -74,10 +74,10 @@ Tout ce qui est possible de mettre:
 ```{r }
 
 (function(B=100000){
-  
   geomTheta = rep(NA, B)
   bootTheta = rep(NA, B)
   for (i in 1:B){
+    set.seed(i)
     geomSample = rgeom(n, p)
     geomTheta[i] = T.param(geomSample)  
     
@@ -99,6 +99,7 @@ Tout ce qui est possible de mettre:
 bootstrap.bias = (function(B=5000){
   bootTheta = rep(NA, B)
   for (i in 1:B){
+    set.seed(i)
     bootSample = sample(sample$obs, n, T)
     bootTheta[i] = T.nonparam(bootSample)
   }
@@ -113,6 +114,7 @@ bootstrap.var = (function(B=50000){
   bootSquaredTheta = rep(NA, B)
   bootTheta = rep(NA, B)
   for (i in 1:B){
+    set.seed(i)
     bootSample = sample(sample$obs, n, T)
     bootTheta[i] = T.nonparam(bootSample)
     bootSquaredTheta[i] = bootTheta[i]^2
@@ -126,16 +128,49 @@ bootstrap.var = (function(B=50000){
 })()
 bootstrap.var
 ```
+## Check for normality of t(X) in non parametric environment
+Allows to check if normality assumption for Theta(F_n) is reasonable
+```{r}
+Boot_theta.np <- rep(NA,B)
+for (i in 1:B) {
+  bootSample = sample(sample$obs, n, T)
+  Boot_theta.np[i] = T.nonparam(bootSample)
+}
+{
+qqnorm(Boot_theta.np, main = "Normal quantile line against boostraped empirical quantile line")
+legend("topleft", legend = c('empirical quantiles', 'Normal quantile'), col = c('black','steelblue'), 
+       lty = c(1,1), lwd = 2)
+qqline(Boot_theta.np, col = "steelblue", lwd = 2)
+}
+```
+Seems like normality is not respected for such distribution. 
 
 # Confidence intervals
 ## Parametric environments:
 Here, we believe in the function distribution of $X$ with a geometric distribution.
+### Check for normality in param. envir. 
+````{r normalityCheckPE}
+B=100000
+Boot_theta.p <- rep(NA,B)
+for (i in 1:B) {
+  set.seed(i)
+  bootSample = rgeom(n,p)
+  Boot_theta.p[i] = T.param(bootSample)
+}
+{
+qqnorm(Boot_theta.p, main = "Normal quantile line against MC quantile line in parametric environment")
+legend("topleft", legend = c('MC quantiles', 'Normal quantile'), col = c('black','steelblue'), 
+       lty = c(1,1), lwd = 2)
+qqline(Boot_theta.p, col = "steelblue", lwd = 2)
+}
+jarque.bera.test(Boot_theta.p)
+```
 
 ### Assymptotically normal
 <<<<<<< HEAD
 ```{r parametric AN }
-Q1AN <- (2*n*mu_hat +2*n - qchisq(p=0.05, df=1))/(2*n*(mu_hat+1)^2)
-Q2AN <- 1/2 * sqrt(  (4*n*mu_hat^2*qchisq(p=0.05,df=1)+4*n*mu_hat*qchisq(p=0.05,df=1)^2)/(n^2*(mu_hat+1)^4))
+Q1AN <- (2*n*sample.mu +2*n - qchisq(p=0.05, df=1))/(2*n*(sample.mu+1)^2)
+Q2AN <- 1/2 * sqrt(  (4*n*sample.mu^2*qchisq(p=0.05,df=1)+4*n*sample.mu*qchisq(p=0.05,df=1)^2)/(n^2*(sample.mu+1)^4))
 CI_param_AN <- c((1-(Q1AN+Q2AN))^3, (1-(Q1AN-Q2AN))^3)
 CI_param_AN
 ```
@@ -195,17 +230,19 @@ rm(CI.param)
 ```{r}
 alpha = 0.05
 B1 = 5000
-StB_distri_of_T <- rep(NA,B1) # constitue la distribution de T(X) dont on va choper les quantiles
+StB_distri_of_T <- rep(NA,B1) # Distribution de T(X) dont on va choper les quantiles
+# !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!!!!!# !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!
+SE_Tstar.p <- sd(sample$obs)/sqrt(n)  # !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!
+# !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!!!!!# !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!
 for (i in 1:B1) {
   set.seed(i)
-  Xstar <- rgeom(n=30, prob = p_hat) # on genere ici car on est dans le cas parametrique
+  Xstar <- rgeom(n=30, prob = sample.p) # on genere ici car on est dans le cas parametrique
   mu_star <- mean(Xstar)
   Tstar <- ( 1-(mu_star+1)^(-1) )^3
-  StB_distri_of_T[i] = (Tstar - mean(vec_T_star))/SE_Tstar }
-# !!!!!!!! MAUVAIS  !!!!!!!!!!!!!! # !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!
-SE_Tstar <- sd(sample$obs)/sqrt(n) # !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!
-# !!!!!!!! MAUVAIS  !!!!!!!!!!!!!! # !!!!!!!! MAUVAIS  !!!!!!!!!!!!!!
-CI_st_B <- c(T_p - quantile(StB_distri_of_T, 0.975)*SE_Tstar,T_p - quantile(StB_distri_of_T, 0.025)*SE_Tstar )
+  StB_distri_of_T[i] = (Tstar - sample.theta.nonparam)/SE_Tstar.p }
+
+CI_st_B <- c(sample.theta.param - quantile(StB_distri_of_T, 0.975)*SE_Tstar.p,
+             sample.theta.param - quantile(StB_distri_of_T, 0.025)*SE_Tstar.p )
 CI_st_B
 ```
 ### Iterated bootstrap
@@ -219,7 +256,7 @@ It_StB_distri_of_T <- rep(NA,B1) # constitue la distribution de T(X) dont on va 
 
 for (i in 1:B1) {
   set.seed(i)
-  Xstar <- rgeom(n=30, prob = p_hat) # on genere ici car on est dans le cas parametrique
+  Xstar <- rgeom(n=30, prob = sample.p) # on genere ici car on est dans le cas parametrique. Par contre je ne sais pas s'il faut utiliser sample.p ou le 'p' réelle. 
   mu_star <- mean(Xstar)
   Tstar <- ( 1-(mu_star+1)^(-1) )^3
   vec_T_star <- rep(NA,B2) # sert uniquement à trouver la standard error de la statistiques bootstrapée
@@ -232,13 +269,27 @@ for (i in 1:B1) {
   It_StB_distri_of_T[i] = (Tstar - mean(vec_T_star))/SE_Tstar
 }
 It_SE_theta_hat <- sd(It_StB_distri_of_T)/sqrt(B1)
-CI_It_st_B <- c(T_p - quantile(It_StB_distri_of_T, 0.975)*It_SE_theta_hat,T_p - 
-               quantile(It_StB_distri_of_T, 0.025)*It_SE_theta_hat )
+CI_It_st_B <- c(sample.theta.param - quantile(It_StB_distri_of_T, 0.975)*It_SE_theta_hat,
+                sample.theta.param - quantile(It_StB_distri_of_T, 0.025)*It_SE_theta_hat )
 CI_It_st_B
 ```
 
 
+
+
+
+
+
+
+
+
+
+
 ## Non-parametric environments:
+
+
+
+
 
 ### AN np
 ```{r}
@@ -250,17 +301,16 @@ CI.np.AN
 
 ### Basic and percentile Bootstrap CI
 
-```{r}
-
+```{r BBandPBinNP}
+B=5000
 CI.np.basic = function(){
   T = rep(NA, B)
 }
 
-B=5000
 CI.np.basic.T = rep(NA, B)
 for (i in 1:B){
   set.seed(i)
-  CI.np.basic.resample = sample(sample$obs, 30, T)
+  CI.np.basic.resample = sample(sample$obs, n, T)
   CI.np.basic.T[i] = sum(CI.np.basic.resample>=3)/30 }
 
 CI.np.basic.quantiles = quantile(CI.np.basic.T, c(alpha/2, 1-alpha/2))
@@ -272,6 +322,110 @@ CI.np.percentil <- CI.np.basic.quantiles
 CI.np.basic
 CI.np.percentil
 ```
+### T-bootstrap 
+```{r}
+B=5000
+CI.np.student = function(){ T = rep(NA, B)}
+np.T = rep(NA, B)
+for (i in 1:B){
+  set.seed(i)
+  np.resample = sample(sample$obs, n, T)
+  np.T[i] = sum(np.resample>=3)/30 
+}
 
+SE_student_np <- sd(sample$obs)/sqrt(n)
+CI.np.studentB <- c(sample.theta.nonparam - quantile(np.T, 0.975)*SE_student_np,
+                    sample.theta.nonparam - quantile(np.T, 0.025)*SE_student_np)
+CI.np.studentB
 
+```
+
+### iterated T-bootstrap (np)
+```{r IteratedBoostrapNP}
+B1 = 5000
+B2=50
+
+np.T_studentized <- rep(NA,B1) # constitue la distribution de T(X) dont on va choper les quantiles
+
+for (i in 1:B1) {
+  set.seed(i)
+  Xstar <- sample(sample$obs,n,TRUE)
+  while (max(Xstar)<3) { # Obligé de rajouter ça sinon on obtient Tstar = 0. En faisant ça, on fait l'hypothès que P(X>=3) >0
+    Xstar <- sample(sample$obs,n,TRUE) }
+  Tstar <- T.nonparam(Xstar)
+  vec_T_star <- rep(NA,B2) # sert uniquement à trouver la standard error de la statistiques bootstrapée
+  for (j in 1:B2) {
+    Xstar_star <- sample(x=Xstar, size= length(Xstar), replace=TRUE)
+    #while (max(Xstar_star)<3) { Xstar_star <- sample(sample$obs,n,TRUE) } # bon là, pas besoin de mettre ça (logique mathématqiuement )
+    vec_T_star[j] <-  T.nonparam(Xstar_star)
+  }
+  SE_Tstar <- sd(vec_T_star)/sqrt(B2) # B2 = length(vec_T_star)
+  np.T_studentized[i] = (Tstar - mean(vec_T_star))/SE_Tstar
+  if(is.na(np.T_studentized[i])){
+    print('check:')
+    print(Tstar)
+    print(Xstar_star)
+    print(Xstar)
+    }
+}
+It_SE_theta_hat_np <- sd(np.T_studentized)/sqrt(B1) # length(np.T_studentized) = B1
+CI_It_st_B_np <- c(sample.theta.nonparam - quantile(np.T_studentized, 0.975)*It_SE_theta_hat_np,
+                sample.theta.nonparam - quantile(np.T_studentized, 0.025)*It_SE_theta_hat_np )
+CI_It_st_B_np
+```
+
+# Hypothesis testing
+```{r thetaZERO}
+theta_zero_statisfied <- 0.05
+theta_zero_unstatisfied <- 0.3
+```
+## non-parametric
+### Tests
+- Statisfied hypothesis
+$$
+\text{H}_0: \theta =0.125 \\
+\text{H}_1: \theta \neq 0.125 
+$$
+- Untatisfied hypothesis
+
+$$
+\text{H}_0: \theta =0.3 \\
+\text{H}_1: \theta \neq 0.3 
+$$ 
+
+```{r}
+T.np.vec <- rep(NA, B)
+for (i in 1:B) {
+  set.seed(i)
+  Xstar <- sample(sample$obs,n, TRUE)
+  T.np.vec[i] <- T.nonparam(Xstar)}
+
+if (quantile(T.np.vec, 0.025)< theta_zero_statisfied   & theta_zero_statisfied < quantile(T.np.vec, 0.975) ){
+  print("Fail to reject null hypothesis")
+} else{print("Reject null hypothesis") }
+
+if (quantile(T.np.vec, 0.025)< theta_zero_unstatisfied   & theta_zero_unstatisfied < quantile(T.np.vec, 0.975) ){
+  print("Fail to reject null hypothesis")
+} else{print("Reject null hypothesis") }
+
+``` 
+### Power 
+
+```{r}
+low_bond_power <- 0.05
+upp_bond_power <- 0.3 
+theta_zero_power_vec <- seq(from=low_bond_power, to=upp_bond_power)
+power_vec <- rep(NA,length(theta_zero_power_vec))
+for (p in 1:length(theta_zero_power_vec)) {
+  T.np.vec <- rep(NA, B)
+  for (i in 1:B) {
+    set.seed(i)
+    Xstar <- sample(sample$obs,n, TRUE)
+    T.np.vec[i] <- T.nonparam(Xstar)}
+  
+  #lower_bond <-  quantile(T.np.vec, 0.025) 
+  #upper_bond <- quantile(T.np.vec, 0.975) 
+  #power_vec[p] <- 1- #Nb de fois on garde H0 | H_a / B
+}
+```
 
