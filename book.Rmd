@@ -109,7 +109,7 @@ bootstrap.bias = (function(B=5000){
 ## Variance
 ```{r Variance estimation}
 
-bootstrap.var = (function(B=50000){
+bootstrap.var = (function(B=5000){
   
   bootSquaredTheta = rep(NA, B)
   bootTheta = rep(NA, B)
@@ -128,6 +128,7 @@ bootstrap.var = (function(B=50000){
 })()
 bootstrap.var
 ```
+
 ## Check for normality of t(X) in non parametric environment
 Allows to check if normality assumption for Theta(F_n) is reasonable
 ```{r}
@@ -145,16 +146,19 @@ qqline(Boot_theta.np, col = "steelblue", lwd = 2)
 ```
 Seems like normality is not respected for such distribution. 
 
+
+
 # Confidence intervals
-## Parametric environments:
+## CI Parametric environments:
 Here, we believe in the function distribution of $X$ with a geometric distribution.
 ### Check for normality in param. envir. 
 ````{r normalityCheckPE}
-B=100000
+require(tseries)
+B=1000
 Boot_theta.p <- rep(NA,B)
 for (i in 1:B) {
   set.seed(i)
-  bootSample = rgeom(n,p)
+  bootSample = rgeom(30,p)
   Boot_theta.p[i] = T.param(bootSample)
 }
 {
@@ -166,11 +170,13 @@ qqline(Boot_theta.p, col = "steelblue", lwd = 2)
 jarque.bera.test(Boot_theta.p)
 ```
 
-### Assymptotically normal
+
+
+### CI Assymptotically normal (par)
 <<<<<<< HEAD
 ```{r parametric AN }
-Q1AN <- (2*n*sample.mu +2*n - qchisq(p=0.05, df=1))/(2*n*(sample.mu+1)^2)
-Q2AN <- 1/2 * sqrt(  (4*n*sample.mu^2*qchisq(p=0.05,df=1)+4*n*sample.mu*qchisq(p=0.05,df=1)^2)/(n^2*(sample.mu+1)^4))
+Q1AN <- (2*n*sample.mu +2*n - qchisq(1-alpha, df=1))/(2*n*(sample.mu+1)^2)
+Q2AN <- 1/2 * sqrt(  (4*n*sample.mu^2*qchisq(1-alpha,df=1)+4*n*sample.mu*qchisq(1-alpha,df=1)^2)/(n^2*(sample.mu+1)^4))
 CI_param_AN <- c((1-(Q1AN+Q2AN))^3, (1-(Q1AN-Q2AN))^3)
 CI_param_AN
 ```
@@ -180,8 +186,8 @@ CI_param_AN
 ```{r parametric AN }
 CI.param.normal = (function(){
   
-  Q1 = (2*n*sample.mu + 2*n - qchisq(alpha, 1)) / (2*n * (sample.mu + 1)^2)
-  Q2 = 0.5 * sqrt((4*n * sample.mu^2 * qchisq(alpha, 1) + 4*n*sample.mu * qchisq(alpha, 1)^2) / (n^2*(sample.mu + 1)^4))
+  Q1 = (2*n*sample.mu + 2*n - qchisq(1-alpha, 1)) / (2*n * (sample.mu + 1)^2)
+  Q2 = 0.5 * sqrt((4*n * sample.mu^2 * qchisq(1-alpha, 1) + 4*n*sample.mu * qchisq(1-alpha, 1)^2) / (n^2*(sample.mu + 1)^4))
   
   low = (1-(Q1+Q2))^3
   upp = (1-(Q1-Q2))^3
@@ -192,7 +198,8 @@ CI.param.normal = (function(){
 
 
 >>>>>>> af1f69cbbef9335aadd19ac65c15a467050d36ca
-### Basic and percentile bootstrap
+
+### CI BB and PBl (par)
 
 ```{r CI Parametric boostrap}
 
@@ -226,7 +233,7 @@ rm(CI.param)
         TODO 
 ------------------->
 
-### Student t bootstrap
+### Student t bootstrap (par)
 ```{r}
 alpha = 0.05
 B1 = 5000
@@ -245,7 +252,7 @@ CI_st_B <- c(sample.theta.param - quantile(StB_distri_of_T, 0.975)*SE_Tstar.p,
              sample.theta.param - quantile(StB_distri_of_T, 0.025)*SE_Tstar.p )
 CI_st_B
 ```
-### Iterated bootstrap
+### Iterated bootstrap (par)
 <!-- je me suis inspiré de https://www.textbook.ds100.org/ch/18/hyp_studentized.html -->
 ```{r}
 alpha = 0.05
@@ -285,13 +292,13 @@ CI_It_st_B
 
 
 
-## Non-parametric environments:
+## CI Non-parametric environments:
 
 
 
 
 
-### AN np
+### CI AN np
 ```{r}
 CI.np.AN <- c(T.nonparam(sample$obs)-qnorm(0.975)*sqrt(bootstrap.var), # page 42 sylla
               T.nonparam(sample$obs)+qnorm(0.975)*sqrt(bootstrap.var) )
@@ -299,7 +306,7 @@ CI.np.AN
 ```
 
 
-### Basic and percentile Bootstrap CI
+### Basic and percentile Bootstrap CI (np)
 
 ```{r BBandPBinNP}
 B=5000
@@ -322,7 +329,7 @@ CI.np.percentil <- CI.np.basic.quantiles
 CI.np.basic
 CI.np.percentil
 ```
-### T-bootstrap 
+### CI T-bootstrap (np)
 ```{r}
 B=5000
 CI.np.student = function(){ T = rep(NA, B)}
@@ -340,7 +347,7 @@ CI.np.studentB
 
 ```
 
-### iterated T-bootstrap (np)
+### CI iterated T-bootstrap (np)
 ```{r IteratedBoostrapNP}
 B1 = 5000
 B2=50
@@ -374,6 +381,8 @@ CI_It_st_B_np <- c(sample.theta.nonparam - quantile(np.T_studentized, 0.975)*It_
 CI_It_st_B_np
 ```
 
+
+
 # Hypothesis testing
 ```{r thetaZERO}
 theta_zero_statisfied <- 0.05
@@ -381,11 +390,12 @@ theta_zero_unstatisfied <- 0.3
 ```
 ## non-parametric
 ### Tests
-- Statisfied hypothesis
+- Statisfied hypothesis (np)
 $$
 \text{H}_0: \theta =0.125 \\
 \text{H}_1: \theta \neq 0.125 
 $$
+
 - Untatisfied hypothesis
 
 $$
@@ -416,6 +426,7 @@ low_bond_power <- 0.05
 upp_bond_power <- 0.3 
 theta_zero_power_vec <- seq(from=low_bond_power, to=upp_bond_power)
 power_vec <- rep(NA,length(theta_zero_power_vec))
+
 for (p in 1:length(theta_zero_power_vec)) {
   T.np.vec <- rep(NA, B)
   for (i in 1:B) {
@@ -425,7 +436,293 @@ for (p in 1:length(theta_zero_power_vec)) {
   
   #lower_bond <-  quantile(T.np.vec, 0.025) 
   #upper_bond <- quantile(T.np.vec, 0.975) 
-  #power_vec[p] <- 1- #Nb de fois on garde H0 | H_a / B
+  #power_vec[p] <- 1- #Nb de fois (on garde H0 | H_a) / B
 }
 ```
+
+
+
+
+
+
+
+# Coverage study
+
+
+```{r coverageSettings}
+n1 <- 10
+n2 <- 50
+n3 <- 500
+N <- c(n1,n2,n3)
+p=0.5
+M=500
+B <- 500
+```
+
+
+
+
+## Coverage parametric
+
+
+## coverage AN (par)
+```{r CoverageANinPar}
+coverage.param.AN <- rep(1,length(N))
+names(coverage.param.AN) <- c('10','50','500')
+
+for (sample_size in 1:length(N)){
+  for (m in 1:M){
+    set.seed(m)
+    new_sample <- rgeom(N[sample_size], p)
+    new_sample.mu <- mean(new_sample)
+    
+    Q1AN <- (2*N[sample_size]*new_sample.mu +2*N[sample_size] - qchisq(p=1-alpha, df=1))/(2*N[sample_size]*(new_sample.mu+1)^2)
+    Q2AN <- 1/2 * sqrt(  (4*N[sample_size]*new_sample.mu^2*qchisq(p=1-alpha,df=1)+4*N[sample_size]*new_sample.mu*qchisq(p=1-alpha,df=1)^2)/(N[sample_size]^2*(new_sample.mu+1)^4))
+    CI.param.AN <- c((1-(Q1AN+Q2AN))^3, (1-(Q1AN-Q2AN))^3)
+    
+    if ( 0.125<= CI.param.AN[1] || 0.125>= CI.param.AN[2]) {
+      coverage.param.AN[sample_size] <- coverage.param.AN[sample_size]- 1/M }
+  }
+}
+coverage.param.AN
+
+
+```
+
+## coverage BB an PB (par)
+```{r}
+coverage.param.BB <- rep(1,length(N))
+names(coverage.param.BB) <- c('10','50','500')
+coverage.param.PB <- rep(1,length(N))
+names(coverage.param.PB) <- c('10','50','500')
+
+for (sample_size in 1:length(N)){
+  for (m in 1:M){
+    #set.seed(m)
+    new_sample <- rgeom(N[sample_size], p)
+    T_star.param <- T.param(new_sample)
+    
+    bootTheta = rep(NA, B)
+    for (i in 1:B){
+      #set.seed(i*m)
+      bootSample =  rgeom(N[sample_size], p)
+      bootTheta[i] = T.param(bootSample)}
+    
+    quantiles = quantile(bootTheta, c(1-alpha/2, alpha/2))
+    
+    CI.basic.param = c(2*T_star.param - quantiles[1], 2*T_star.param - quantiles[2])
+    CI.percent.param = c(quantiles[2], quantiles[1])
+    
+    if ( 0.125< CI.basic.param[1] || 0.125> CI.basic.param[2]) {
+      coverage.param.BB[sample_size] <- coverage.param.BB[sample_size]- 1/M }
+    
+    if ( 0.125< CI.percent.param[1] || 0.125> CI.percent.param[2]) {
+      coverage.param.PB[sample_size] <- coverage.param.PB[sample_size]- 1/M }
+  }
+}
+
+coverage.param.BB
+coverage.param.PB
+
+```
+
+
+## coverage t-boot (par)
+
+## coverage IB (par)
+```{r CoverageTBinNP}
+M <- 100
+B1 <- 100
+B2<- 50
+
+coverage.param.IB <- rep(1,length(N))
+names(coverage.param.IB) <- c('10','50','500')
+
+for (sample_size in 1:length(N)){
+  for (m in 1:M){
+    set.seed(m) 
+    new_sample <- rgeom(N[sample_size], p)
+    #while (max(new_sample)<3) { new_sample <- rgeom(N[sample_size], p) }
+    new_sample.mu = mean(new_sample)
+    new_sample.p = 1/(new_sample.mu+1) 
+    T_x <- T.param(new_sample)
+    param.T_studentized <- rep(NA,B1) # constitue la distribution de T(X) dont on va choper les quantiles
+    for (i in 1:B1) {
+      set.seed(i*m)
+      Xstar <- rgeom(n=N[sample_size], prob = new_sample.p) # on genere ici car on est dans le cas parametrique. Par contre je ne sais pas s'il faut utiliser sample.p ou le 'p' réelle. 
+      while (max(Xstar<=0) || length(unique(Xstar))<=1 ){Xstar <- rgeom(n=N[sample_size], prob = new_sample.p)}
+      mu_star <- mean(Xstar)
+      Tstar <- ( 1-(mu_star+1)^(-1) )^3
+      vec_T_star <- rep(NA,B2) # sert uniquement à trouver la standard error de la statistiques bootstrapée
+      for (j in 1:B2) {
+        Xstar_star <- sample(x=Xstar, size= length(Xstar), replace=T)
+        mu_star_star <- mean(Xstar_star)
+        vec_T_star[j] <-  ( 1-(mu_star_star+1)^(-1) )^3
+      }
+      SE_Tstar <- sd(vec_T_star)/sqrt(B2)
+      param.T_studentized[i] = (Tstar - mean(vec_T_star))/SE_Tstar
+      if(is.na(param.T_studentized[i])){
+        print(Tstar)
+        print(vec_T_star)
+        print(SE_Tstar)
+        stop()
+      }
+    }
+    It_SE_theta_hat <- sd(param.T_studentized)/sqrt(B1)
+    CI_It_st_B_param <- c(T_x - quantile(param.T_studentized, 0.975)*It_SE_theta_hat,
+                    T_x - quantile(param.T_studentized, 0.025)*It_SE_theta_hat )
+    
+    if ( 0.125<= CI_It_st_B_param[1] || 0.125>= CI_It_st_B_param[2]) {
+      coverage.param.IB[sample_size] <- coverage.param.IB[sample_size]- 1/M }
+  }
+  
+}
+coverage.param.IB
+```
+
+
+
+
+
+
+## Non Parametric coverage
+
+
+### AN (np)
+
+```{r CoverageANinNP}
+coverage.np.AN <- rep(1,length(N))
+names(coverage.np.AN) <- c('10','50','500')
+
+for (sample_size in 1:length(N)){
+  for (m in 1:M){
+    set.seed(m)
+    new_sample <- rgeom(N[sample_size], p)
+    bootSquaredTheta = rep(NA, B)
+    bootTheta = rep(NA, B)
+    for (i in 1:B){
+      set.seed(i*m)
+      bootSample = sample(new_sample, N[sample_size], TRUE)
+      bootTheta[i] = T.nonparam(bootSample) 
+      bootSquaredTheta[i] = bootTheta[i]^2
+      }
+    bootstrap.var <-  mean(bootSquaredTheta) - mean(bootTheta)^2
+    CI.np.AN <- c(T.nonparam(new_sample)-qnorm(0.975)*sqrt(bootstrap.var), # page 42 sylla
+                T.nonparam(new_sample)+qnorm(0.975)*sqrt(bootstrap.var) )
+    if ( 0.125<= CI.np.AN[1] || 0.125>= CI.np.AN[2]) {
+      coverage.np.AN[sample_size] <- coverage.np.AN[sample_size]- 1/M }
+  }
+}
+coverage.np.AN
+```
+### BB and PB
+```{r CoverageBBinNP}
+coverage.np.BB <- rep(1,length(N))
+names(coverage.np.BB) <- c('10','50','500')
+
+coverage.np.PB <- rep(1,length(N))
+names(coverage.np.PB) <- c('10','50','500')
+
+for (sample_size in 1:length(N)){
+  for (m in 1:M){
+    set.seed(m) 
+    new_sample <- rgeom(N[sample_size], p)
+    T.np.distri = rep(NA, B)
+    for (i in 1:B){
+      set.seed(i*m)
+      CI.np.basic.resample = sample(new_sample, N[sample_size], TRUE)
+      T.np.distri[i] =T.nonparam(CI.np.basic.resample) }
+    
+    CI.np.quantiles = quantile(T.np.distri, c(alpha/2, 1-alpha/2))
+  
+    
+    CI.np.BB = c(2*T.nonparam(new_sample) - CI.np.quantiles[2], 
+                    2*T.nonparam(new_sample) - CI.np.quantiles[1])
+    if ( 0.125<= CI.np.BB[1] || 0.125>= CI.np.BB[2]) {
+      coverage.np.BB[sample_size] <- coverage.np.BB[sample_size]- 1/M }
+  
+    
+    CI.np.percentil <- CI.np.quantiles
+    if ( 0.125<= CI.np.percentil[1] || 0.125>= CI.np.percentil[2]) {
+      coverage.np.PB[sample_size] <- coverage.np.PB[sample_size]- 1/M }
+  
+  }
+}
+coverage.np.BB
+coverage.np.PB
+```
+
+- TB ==> Ca n'a pas l'air de fonctionnner 
+```{r CoverageTBinNP}
+
+coverage.np.TB <- rep(1,length(N))
+names(coverage.np.TB) <- c('10','50','500')
+
+for (sample_size in 1:length(N)){
+  for (m in 1:M){
+    set.seed(m) 
+    new_sample <- rgeom(N[sample_size], p)
+    np.T = rep(NA, B)
+    for (i in 1:B){
+      set.seed(i*m)
+      np.resample = sample(new_sample, N[sample_size], TRUE)
+      np.T[i] = T.nonparam(np.resample) }
+
+    SE_student_np <- sd(new_sample)/sqrt(N[sample_size])
+    CI.np.studentB <- c(T.nonparam(new_sample) - quantile(np.T, 0.975)*SE_student_np,
+                        T.nonparam(new_sample) - quantile(np.T, 0.025)*SE_student_np)
+    
+    if ( 0.125<= CI.np.studentB[1] || 0.125>= CI.np.studentB[2]) {
+      coverage.np.TB[sample_size] <- coverage.np.TB[sample_size]- 1/M }
+  }
+}
+coverage.np.TB
+```
+
+
+- IB
+
+```{r CoverageTBinNP}
+M <- 100
+B1 <- 100
+B2<- 50
+
+coverage.np.TB <- rep(1,length(N))
+names(coverage.np.TB) <- c('10','50','500')
+
+for (sample_size in 1:length(N)){
+  for (m in 1:M){
+    set.seed(m) 
+    new_sample <- rgeom(N[sample_size], p)
+    while (max(new_sample)<3) { new_sample <- rgeom(N[sample_size], p) }
+    
+    np.T_studentized <- rep(NA,B1) # constitue la distribution de T(X) dont on va choper les quantiles
+
+    for (i in 1:B1) {
+      set.seed(i*m)
+      Xstar <- sample(new_sample,n,TRUE)
+      while (max(Xstar)<3) { Xstar <- sample(new_sample,n,TRUE) }
+      Tstar <- T.nonparam(Xstar)
+      vec_T_star <- rep(NA,B2) # sert uniquement à trouver la standard error de la statistiques bootstrapée
+      for (j in 1:B2) {
+        set.seed(i*m*j)
+        Xstar_star <- sample(x=Xstar, size= length(Xstar), replace=TRUE)
+        vec_T_star[j] <-  T.nonparam(Xstar_star)
+      }
+      SE_Tstar <- sd(vec_T_star)/sqrt(B2) # B2 = length(vec_T_star)
+      np.T_studentized[i] = (Tstar - mean(vec_T_star))/SE_Tstar
+      
+    }
+    It_SE_theta_hat_np <- sd(np.T_studentized)/sqrt(B1) # length(np.T_studentized) = B1
+    CI_It_st_B_np <- c(T.nonparam(new_sample) - quantile(np.T_studentized, 0.975)*It_SE_theta_hat_np,
+                       T.nonparam(new_sample) - quantile(np.T_studentized, 0.025)*It_SE_theta_hat_np )
+    
+    if ( 0.125<= CI_It_st_B_np[1] || 0.125>= CI_It_st_B_np[2]) {
+      coverage.np.TB[sample_size] <- coverage.np.TB[sample_size]- 1/M }
+  }
+  
+}
+coverage.np.TB
+```
+
 
