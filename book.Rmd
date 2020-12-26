@@ -175,6 +175,7 @@ jarque.bera.test(Boot_theta.p)
 ### CI Assymptotically normal (par)
 <<<<<<< HEAD
 ```{r parametric AN }
+# https://stats.stackexchange.com/questions/310413/confidence-interval-using-central-limit-theorem 
 Q1AN <- (2*n*sample.mu +2*n - qchisq(1-alpha, df=1))/(2*n*(sample.mu+1)^2)
 Q2AN <- 1/2 * sqrt(  (4*n*sample.mu^2*qchisq(1-alpha,df=1)+4*n*sample.mu*qchisq(1-alpha,df=1)^2)/(n^2*(sample.mu+1)^4))
 CI_param_AN <- c((1-(Q1AN+Q2AN))^3, (1-(Q1AN-Q2AN))^3)
@@ -383,25 +384,24 @@ CI_It_st_B_np
 
 
 
+
+
+
 # Hypothesis testing
+
+
 ```{r thetaZERO}
 theta_zero_statisfied <- 0.05
 theta_zero_unstatisfied <- 0.3
 ```
-## non-parametric
-### Tests
+
+## Tests
+### non parametrique
 - Statisfied hypothesis (np)
 $$
 \text{H}_0: \theta =0.125 \\
 \text{H}_1: \theta \neq 0.125 
 $$
-
-- Untatisfied hypothesis
-
-$$
-\text{H}_0: \theta =0.3 \\
-\text{H}_1: \theta \neq 0.3 
-$$ 
 
 ```{r}
 T.np.vec <- rep(NA, B)
@@ -413,6 +413,32 @@ for (i in 1:B) {
 if (quantile(T.np.vec, 0.025)< theta_zero_statisfied   & theta_zero_statisfied < quantile(T.np.vec, 0.975) ){
   print("Fail to reject null hypothesis")
 } else{print("Reject null hypothesis") }
+
+```
+
+
+
+- Untatisfied hypothesis
+
+$$
+\text{H}_0: \theta =0.3 \\
+\text{H}_1: \theta \neq 0.3 
+$$ 
+
+
+```{r}
+## MAUVAIS JE SAIS PAS COMMMENT FAIRE
+T.testing <- rep(NA, B)
+tweaked_sample <- rep(NA,n)
+for (i in 1:n) {
+  new_sample <- sample(sample$obs, n, TRUE)
+  tweaked_sample[i] <- quantile(new_sample, probs = 0.7)
+}
+T.nonparam(tweaked_sample)
+
+```
+
+```{r}
 
 if (quantile(T.np.vec, 0.025)< theta_zero_unstatisfied   & theta_zero_unstatisfied < quantile(T.np.vec, 0.975) ){
   print("Fail to reject null hypothesis")
