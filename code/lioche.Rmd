@@ -202,20 +202,15 @@ CI.iterated.nonparam = CI.iterated(sampleFunction = sample(sample, n, T))
 
 # Coverage of confidence interval
 
-```{r coverage setup}
-
-```
-
-
 
 ```{r coverage}
-#TODO: FINISH et verifier la "DISTANCE" qui semble bizarre !
+#TODO: FINISH
 # + better (full) parallel ? 
 
 m = c(10,20,50,100,500)
 
 
-# Attention: c'est "exponentiel", ça prend déjà qqs secondes
+# Attention: c'est "exponentiel", ça prend déjà ~30s
 M = 200 # Monte-Carlo
 B = 1000  # Iterations
 
@@ -228,18 +223,16 @@ cover = function(confidence){
 clusterExport(cl, c("M", "B", "cover", "T.boot", 
                     "CI.asym.param", "CI.asym.nonparam", "CI.basic", "CI.percent", "CI.student"))
 
-coverage.and.distance = function(){
+coverage.and.distance = (function(){
   coverage = data.frame(); distance = data.frame()
   for (n_i in m){
     
-    force(n_i); clusterExport(cl, "n_i", envir = environment())
+    #force(n_i); clusterExport(cl, "n_i", envir = environment())
     coverage.loc = parLapply(cl, 1:B, function(i){
       
       # Comme au devoir: on re-génère B échantillons réels
       newSample = rgeom(n_i, p)
-      
       newSample.mu = mean(newSample)
-      newSample.var = var(newSample)
       
       # Par contre je ne suis pas certain de quel estimateur je dois utiliser ? 
       newSample.T.param = T.param(newSample)
@@ -253,7 +246,7 @@ coverage.and.distance = function(){
       
       all = list(
         CI.asym.param(newSample.mu, n_i),
-        CI.asym.nonparam(newSample.T.nonparam, newSample.var),
+        CI.asym.nonparam(newSample.T.nonparam, var(newSample.boot.T)),
         CI.basic(newSample.boot.T, newSample.T.param),
         CI.basic(newSample.boot.T, newSample.T.nonparam),
         CI.percent(newSample.boot.T),
@@ -270,25 +263,23 @@ coverage.and.distance = function(){
   colnames(distance) = c("Asymp param", "Asym np", "Basic param", "Basic np", "Percent", "Student param", "Student np")
   
   rownames(coverage) = m; rownames(distance) = m
-  
-  View(coverage); View(distance)
   return(list(coverage=coverage, distance=distance))
-}
+})()
 
-temp = coverage.and.distance()
-coverage = temp$coverage
-distance = temp$distance
-rm(temp)
+coverage = coverage.and.distance$coverage
+distance = coverage.and.distance$distance
+rm(coverage.and.distance)
+# ---
+View(coverage)
+View(distance)
+
+# Time comparison:
+# utilisateur     système      écoulé 
+# with parLapply (parallel)
+#       0.17        0.24       31.06 
+# with lapply (base)
+#       63.08       1.72       76.64 
 ```
-
-# Code execution
-
-```{r}
-
-
-```
-
-
 
 ```{r end}
 # Close clusters
