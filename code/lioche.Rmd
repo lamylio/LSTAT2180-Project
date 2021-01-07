@@ -153,13 +153,13 @@ CI.student.nonparam = CI.student(T.nonparam.boot, sample.T.nonparam)
 ## Iterated-T boostrap method
 
 ```{r iterated CI}
-# TODO : parallelize ?
-
 # Est-ce que ça reviendrait pas au même que de directement sampler dans T.x.boot ? 
-# Btw je ne vois pas en quoi le fait que TStar = 0 soit un problème mmh
-CI.iterated = function(sampleFunction, M2 = M/100){
+
+# 10 secondes
+CI.iterated = function(sampleFunction, M=10000, M2 = M/100){
   
-  iterated = sapply(1:M, function(i){
+  force(sampleFunction); clusterExport(cl, c("sampleFunction", "M2"), envir = environment())
+  iterated = parSapply(cl, 1:M, function(i){
   
     boot = sampleFunction
     TStar = sapply(seq(1,M2), function(j){
@@ -173,8 +173,8 @@ CI.iterated = function(sampleFunction, M2 = M/100){
   })
   
   iterated.SE = sd(iterated)/sqrt(M)
-  round(data.frame(low=sample.T.param - quantile(iterated, 1-alpha/2) * iterated.SE,
-             upp=sample.T.param - quantile(iterated, alpha/2) * iterated.SE, row.names = NULL), opt.digits)
+  round(data.frame(low=sample.T.param - quantile(iterated, 1-alpha/2, na.rm = T) * iterated.SE,
+             upp=sample.T.param - quantile(iterated, alpha/2, na.rm=T) * iterated.SE, row.names = NULL), opt.digits)
   
 }
 
@@ -204,11 +204,8 @@ CI.iterated.nonparam = CI.iterated(sampleFunction = sample(sample, n, T))
 
 
 ```{r coverage}
-#TODO: FINISH
-# + better (full) parallel ? 
 
 m = c(10,20,50,100,500)
-
 
 # Attention: c'est "exponentiel", ça prend déjà ~30s
 M = 200 # Monte-Carlo
@@ -227,7 +224,7 @@ coverage.and.distance = (function(){
   coverage = data.frame(); distance = data.frame()
   for (n_i in m){
     
-    #force(n_i); clusterExport(cl, "n_i", envir = environment())
+    force(n_i); clusterExport(cl, "n_i", envir = environment())
     coverage.loc = parLapply(cl, 1:B, function(i){
       
       # Comme au devoir: on re-génère B échantillons réels
@@ -275,10 +272,12 @@ View(distance)
 
 # Time comparison:
 # utilisateur     système      écoulé 
+#
 # with parLapply (parallel)
-#       0.17        0.24       31.06 
+#       0.17        0.24       31.06s
+#
 # with lapply (base)
-#       63.08       1.72       76.64 
+#       63.08       1.72       76.64s 
 ```
 
 ```{r end}
