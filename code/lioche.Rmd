@@ -13,7 +13,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
 
-set.seed(2021)
+set.seed(1)
+opt.digits = 3
 
 n = 30 
 p = 0.5
@@ -35,7 +36,7 @@ sample.T.param = T.param(sample)
 sample.T.nonparam = T.nonparam(sample)
 
 # ---
-export.list = c("sample", "n", "p", "M", "alpha", "theta", "sample.mu", "sample.p","T.param", "T.nonparam", "sample.T.param", "sample.T.nonparam")
+export.list = c("opt.digits", "sample", "n", "p", "M", "alpha", "theta", "sample.mu", "sample.p","T.param", "T.nonparam", "sample.T.param", "sample.T.nonparam")
 
 ```
 
@@ -51,16 +52,17 @@ clusterExport(cl, export.list)
 
 ```{r boot}
 T.boot = function(T.function, this.n=n, this.sample=NULL){
+  force(this.n); force(this.sample)
   if (!is.null(this.sample)){
-    parSapply(cl, 1:M, function (i) T.nonparam(sample(this.sample, this.n, T)))
+    sapply(1:M, function (i) T.nonparam(sample(this.sample, this.n, T)))
   }else{
-    parSapply(cl, 1:M, function (i) T.param(rgeom(this.n, p)))
+    sapply(1:M, function (i) T.param(rgeom(this.n, p)))
   }
 }
 
-
-T.nonparam.boot = T.boot(T.nonparam, this.sample = sample)
-T.param.boot = T.boot(T.param, this.n = n)
+# We multiply by 4 the batch size, because yolo
+T.nonparam.boot = unlist(clusterCall(cl, T.boot, T.nonparam, this.sample=sample))
+T.param.boot = unlist(clusterCall(cl, T.boot, T.param, this.n = n))
 ```
 
 
@@ -89,7 +91,6 @@ barplot(table(T.param.boot))
 
 qqnorm(T.nonparam.boot); qqline(T.nonparam.boot, col=2)
 qqnorm(T.param.boot); qqline(T.param.boot, col=2)
-
 ```
 
 # Give a confidence interval
@@ -97,7 +98,7 @@ qqnorm(T.param.boot); qqline(T.param.boot, col=2)
 ## Asymptotic method
 
 ```{r asymptotic CI}
-CI.param.asym = function(this.mu=sample.mu, this.n=n){
+CI.asym.param = function(this.mu=sample.mu, this.n=n){
   
   Q1 = (2*this.n*this.mu + 2*this.n - qchisq(1-alpha, 1)) / (2*this.n*(this.mu + 1)^2)
   Q2 = 0.5 * sqrt((4*this.n*this.mu^2 * qchisq(1-alpha, 1) + 4*this.n*this.mu * qchisq(1-alpha, 1)^2) / (n^2*(this.mu + 1)^4))
@@ -105,20 +106,23 @@ CI.param.asym = function(this.mu=sample.mu, this.n=n){
   low = (1-(Q1+Q2))^3
   upp = (1-(Q1-Q2))^3
   
-  data.frame(low, upp)
+  round(data.frame(low, upp), opt.digits)
 }
 
-CI.nonparam.asym = function(this.sample.T = sample.T.nonparam, this.variance = variance.nonparam){
+CI.asym.nonparam = function(this.sample.T = sample.T.nonparam, this.variance = variance.nonparam){
   upp = this.sample.T + qnorm(1-alpha/2) * sqrt(this.variance)
   low = this.sample.T - qnorm(1-alpha/2) * sqrt(this.variance)
-  data.frame(low, upp)
+  round(data.frame(low, upp), opt.digits)
 }
+
+CI.asym.param.value = CI.asym.param()
+CI.asym.nonparam.value = CI.asym.nonparam()
 ```
 
 ## Percentile boostrap method
 
 ```{r percentile CI}
-CI.percent = function(this.boot.T) quantile(this.boot.T, c(alpha/2, 1-alpha/2))
+CI.percent = function(this.boot.T) round(data.frame(low=quantile(this.boot.T, alpha/2), upp=quantile(this.boot.T, 1-alpha/2)), opt.digits)
 
 CI.percent.param = CI.percent(T.param.boot)
 CI.percent.nonparam = CI.percent(T.nonparam.boot)
@@ -127,20 +131,20 @@ CI.percent.nonparam = CI.percent(T.nonparam.boot)
 ## Basic boostrap method
 
 ```{r basic CI}
-CI.basic = function(this.boot.T, this.sample.T) data.frame(low=2*this.sample.T - CI.percent(this.boot.T)[2], upp= 2*this.sample.T - CI.percent(this.boot.T)[1])
+CI.basic = function(this.boot.T, this.sample.T) round(data.frame(low=2*this.sample.T - CI.percent(this.boot.T)$upp, upp= 2*this.sample.T - CI.percent(this.boot.T)$low), opt.digits)
 
 CI.basic.param = CI.basic(T.param.boot, sample.T.param)
 CI.basic.nonparam = CI.basic(T.nonparam.boot, sample.T.nonparam)
 ```
 
-## T-boostrap method
+## Student-boostrap method
 <!-- A vérifier ?? -->
 
 ```{r student CI}
-CI.student = function(this.boot.T, this.sample.T, this.sample = sample, this.n = n) data.frame(
+CI.student = function(this.boot.T, this.sample.T, this.sample = sample, this.n = n) round(data.frame(
   low=this.sample.T - quantile(this.boot.T, 1-alpha/2) * (sd(this.sample)/sqrt(this.n)), 
   upp=this.sample.T - quantile(this.boot.T, alpha/2) * (sd(this.sample)/sqrt(this.n))
-)
+), opt.digits)
 
 CI.student.param = CI.student(T.param.boot, sample.T.param)
 CI.student.nonparam = CI.student(T.nonparam.boot, sample.T.nonparam)
@@ -149,7 +153,8 @@ CI.student.nonparam = CI.student(T.nonparam.boot, sample.T.nonparam)
 ## Iterated-T boostrap method
 
 ```{r iterated CI}
-# TODO : parallelize
+# TODO : parallelize ?
+
 # Est-ce que ça reviendrait pas au même que de directement sampler dans T.x.boot ? 
 # Btw je ne vois pas en quoi le fait que TStar = 0 soit un problème mmh
 CI.iterated = function(sampleFunction, M2 = M/100){
@@ -168,8 +173,8 @@ CI.iterated = function(sampleFunction, M2 = M/100){
   })
   
   iterated.SE = sd(iterated)/sqrt(M)
-  data.frame(low=sample.T.param - quantile(iterated, 1-alpha/2) * iterated.SE,
-             upp=sample.T.param - quantile(iterated, alpha/2) * iterated.SE, row.names = NULL)
+  round(data.frame(low=sample.T.param - quantile(iterated, 1-alpha/2) * iterated.SE,
+             upp=sample.T.param - quantile(iterated, alpha/2) * iterated.SE, row.names = NULL), opt.digits)
   
 }
 
@@ -204,9 +209,15 @@ CI.iterated.nonparam = CI.iterated(sampleFunction = sample(sample, n, T))
 
 
 ```{r coverage}
-#TODO
-m = c(10,100,500,1000)
-B = 50
+#TODO: FINISH et verifier la "DISTANCE" qui semble bizarre !
+# + better (full) parallel ? 
+
+m = c(10,20,50,100,500)
+
+
+# Attention: c'est "exponentiel", ça prend déjà qqs secondes
+M = 200 # Monte-Carlo
+B = 1000  # Iterations
 
 # On ne fait pas l'iterated dans le coverage
 
@@ -214,38 +225,74 @@ cover = function(confidence){
   (confidence$low <= theta & theta <= confidence$upp)
 }
 
-coverage = data.frame()
-for (n_i in m){
-  coverage.loc = sapply(1:B, function(i) {
+clusterExport(cl, c("M", "B", "cover", "T.boot", 
+                    "CI.asym.param", "CI.asym.nonparam", "CI.basic", "CI.percent", "CI.student"))
+
+coverage.and.distance = function(){
+  coverage = data.frame(); distance = data.frame()
+  for (n_i in m){
     
-    newSample = rgeom(n_i, p)
-    
-    newSample.mu = mean(newSample)
-    newSample.var = var(newSample)
-    newSample.T = T.param(newSample)
-    
-   # ---
-    
-    c(
-      cover(CI.param.asym(newSample.mu, n_i)),
-      cover(CI.nonparam.asym(newSample.T, newSample.var)),
-      cover(CI.basic(T.boot(T.param, this.n = n_i), newSample.T)),
-      cover(CI.basic(T.boot(T.nonparam, this.sample = newSample), newSample.T))
-      # TODO: le reste
-    )
-    
-  })
-  coverage = rbind(coverage, rowMeans(coverage.loc)*100)
+    force(n_i); clusterExport(cl, "n_i", envir = environment())
+    coverage.loc = parLapply(cl, 1:B, function(i){
+      
+      # Comme au devoir: on re-génère B échantillons réels
+      newSample = rgeom(n_i, p)
+      
+      newSample.mu = mean(newSample)
+      newSample.var = var(newSample)
+      
+      # Par contre je ne suis pas certain de quel estimateur je dois utiliser ? 
+      newSample.T.param = T.param(newSample)
+      newSample.T.nonparam = T.nonparam(newSample)
+      
+      # T.nonparam = on utilise sample() au lieu de rgeom()
+      # Devrait-on aussi passer par rgeom??
+      newSample.boot.T = T.boot(T.nonparam, this.sample = newSample)
+      
+     # ---
+      
+      all = list(
+        CI.asym.param(newSample.mu, n_i),
+        CI.asym.nonparam(newSample.T.nonparam, newSample.var),
+        CI.basic(newSample.boot.T, newSample.T.param),
+        CI.basic(newSample.boot.T, newSample.T.nonparam),
+        CI.percent(newSample.boot.T),
+        CI.student(newSample.boot.T, newSample.T.param, newSample, n_i),
+        CI.student(newSample.boot.T, newSample.T.nonparam, newSample, n_i)
+      )
+      
+      list(sapply(all, cover), sapply(all, function(ci) abs(ci$upp-ci$low)))
+    })
+    coverage = rbind(coverage, rowMeans(sapply(1:B, function(i) unlist(coverage.loc[[i]][1])))*100)
+    distance = rbind(distance, rowMeans(sapply(1:B, function(i) unlist(coverage.loc[[i]][2]))))
+  }
+  colnames(coverage) = c("Asymp param", "Asym np", "Basic param", "Basic np", "Percent", "Student param", "Student np")
+  colnames(distance) = c("Asymp param", "Asym np", "Basic param", "Basic np", "Percent", "Student param", "Student np")
   
- 
-   
+  rownames(coverage) = m; rownames(distance) = m
+  
+  View(coverage); View(distance)
+  return(list(coverage=coverage, distance=distance))
 }
-colnames(coverage) = c("Asymp. param", "Asym. np", "Basic. param", "Basic. np")
+
+temp = coverage.and.distance()
+coverage = temp$coverage
+distance = temp$distance
+rm(temp)
 ```
+
+# Code execution
+
+```{r}
+
+
+```
+
 
 
 ```{r end}
 # Close clusters
 stopCluster(cl)
+rm(cl)
 ```
 
