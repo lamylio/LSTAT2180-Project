@@ -14,31 +14,45 @@ library(dplyr)
 library(ggplot2)
 
 set.seed(1)
-opt.digits = 3
+opt.digits = 4
 
 n = 30 
 p = 0.5
 M = 50000
 
 alpha = 0.05
-theta = dgeom(2, p)
+theta = pgeom(2, 0.5, lower.tail = F) # >2 = 0.125
 
-T.param = function(obs){return (round((1 - (1/(mean(obs)+1)) )^3, 4))}
+# J'ai ajouté une correction de bias à l'estimateur de p, et à T.param
+p.estim = function(obs){ph = (1/(mean(obs)+1)); ph-(ph*(1-ph))/length(obs)}
+T.param = function(obs){return (round((1 - p.estim(obs) )^3, 4))}
 T.nonparam = function(obs){return (round(sum(obs>=3)/length(obs), 4))}
 
 sample = rgeom(n=30, prob=0.5)
 sample.distribution = prop.table(table(sample))
 
 sample.mu = mean(sample)
-sample.p = 1/(sample.mu+1)
+sample.p = p.estim(sample)
 
 sample.T.param = T.param(sample)
 sample.T.nonparam = T.nonparam(sample)
 
 # ---
-export.list = c("opt.digits", "sample", "n", "p", "M", "alpha", "theta", "sample.mu", "sample.p","T.param", "T.nonparam", "sample.T.param", "sample.T.nonparam")
+export.list = c("opt.digits", "sample", "n", "p", "M", "alpha", "theta", "sample.mu", "sample.p", "p.estim", "T.param", "T.nonparam", "sample.T.param", "sample.T.nonparam", "T.boot")
 
 ```
+
+```{r bootstrap helper}
+T.boot = function(T.function, this.n=n, this.sample=NULL, this.M = M){
+  force(this.n); force(this.sample)
+  if (!is.null(this.sample)){
+    sapply(1:this.M, function (i) T.function(sample(this.sample, this.n, T)))
+  }else{
+    sapply(1:this.M, function (i) T.function(rgeom(this.n, p)))
+  }
+}
+```
+
 
 # Parallelization
 
@@ -51,16 +65,6 @@ clusterExport(cl, export.list)
 # Batch of boostrapped samples (parallelized)
 
 ```{r boot}
-T.boot = function(T.function, this.n=n, this.sample=NULL){
-  force(this.n); force(this.sample)
-  if (!is.null(this.sample)){
-    sapply(1:M, function (i) T.nonparam(sample(this.sample, this.n, T)))
-  }else{
-    sapply(1:M, function (i) T.param(rgeom(this.n, p)))
-  }
-}
-
-# We multiply by 4 the batch size, because yolo
 T.nonparam.boot = unlist(clusterCall(cl, T.boot, T.nonparam, this.sample=sample))
 T.param.boot = unlist(clusterCall(cl, T.boot, T.param, this.n = n))
 ```
@@ -69,11 +73,11 @@ T.param.boot = unlist(clusterCall(cl, T.boot, T.param, this.n = n))
 # Bias and variance
 
 ```{r bias and variance}
-bias.nonparam = mean(T.nonparam.boot - theta)
-bias.param = mean(T.param.boot - theta)
+bias.nonparam = round(mean(T.nonparam.boot - theta), opt.digits)
+bias.param = round(mean(T.param.boot - theta), opt.digits)
 
 # We can simply use built-in function var(x) but.. 
-variance = function(this.boot.T) mean(this.boot.T^2 - mean(this.boot.T)^2)
+variance = function(this.boot.T) round(mean(this.boot.T^2 - mean(this.boot.T)^2), opt.digits)
 variance.nonparam = variance(T.nonparam.boot)
 variance.param = variance(T.param.boot)
 ```
@@ -138,12 +142,11 @@ CI.basic.nonparam = CI.basic(T.nonparam.boot, sample.T.nonparam)
 ```
 
 ## Student-boostrap method
-<!-- A vérifier ?? -->
 
 ```{r student CI}
 CI.student = function(this.boot.T, this.sample.T, this.sample = sample, this.n = n) round(data.frame(
-  low=this.sample.T - quantile(this.boot.T, 1-alpha/2) * (sd(this.sample)/sqrt(this.n)), 
-  upp=this.sample.T - quantile(this.boot.T, alpha/2) * (sd(this.sample)/sqrt(this.n))
+  low=this.sample.T - sd(this.sample) * quantile(this.boot.T, 1-alpha/2) /sqrt(this.n), 
+  upp=this.sample.T - sd(this.sample) * quantile(this.boot.T, alpha/2) / sqrt(this.n)
 ), opt.digits)
 
 CI.student.param = CI.student(T.param.boot, sample.T.param)
@@ -155,53 +158,61 @@ CI.student.nonparam = CI.student(T.nonparam.boot, sample.T.nonparam)
 ```{r iterated CI}
 # Est-ce que ça reviendrait pas au même que de directement sampler dans T.x.boot ? 
 
-# 10 secondes
-CI.iterated = function(sampleFunction, M=10000, M2 = M/100){
+# 15 secondes
+CI.iterated = function(T.function, sampleFunction, M=5000, M2 = 500){
   
   force(sampleFunction); clusterExport(cl, c("sampleFunction", "M2"), envir = environment())
   iterated = parSapply(cl, 1:M, function(i){
   
     boot = sampleFunction
-    TStar = sapply(seq(1,M2), function(j){
-      bootSample = sample(boot, n, T)
-      T.param(bootSample)
-    })
+    TStar = T.boot(T.function, this.sample=boot, this.M=M2)
+
+    # TStar = sapply(seq(1,M2), function(j){
+    #   bootSample = sample(boot, n, T)
+    #   T.param(bootSample)
+    # })
     
     TStar.SE = sd(TStar)/sqrt(M2)
     
-    (T.param(boot) - mean(TStar))/TStar.SE
+    (T.function(boot) - mean(TStar))/TStar.SE
   })
   
   iterated.SE = sd(iterated)/sqrt(M)
-  round(data.frame(low=sample.T.param - quantile(iterated, 1-alpha/2, na.rm = T) * iterated.SE,
-             upp=sample.T.param - quantile(iterated, alpha/2, na.rm=T) * iterated.SE, row.names = NULL), opt.digits)
+  round(data.frame(low=T.function(sample) - quantile(iterated, 1-alpha/2, na.rm = T) * iterated.SE,
+             upp=T.function(sample) - quantile(iterated, alpha/2, na.rm=T) * iterated.SE, row.names = NULL), opt.digits)
   
 }
 
-CI.iterated.param = CI.iterated(sampleFunction = rgeom(n, p))
-CI.iterated.nonparam = CI.iterated(sampleFunction = sample(sample, n, T))
+# Je ne sais pas trop si je dois utiliser rgeom, sample, T.param ou T.nonparam, mais on peut choisir du coup.
+CI.iterated.param = CI.iterated(T.param, sampleFunction = rgeom(n, p))
+CI.iterated.nonparam = CI.iterated(T.nonparam, sampleFunction = sample(sample, n, T))
 
 
 ```
 
 # Hypothesis test
 
-## Satisfied
+## Simple method
 
 ```{r satisfied}
 #TODO
+
+# H0: thetha = 0.125
+
+# True distribution is : T.param.boot
+
+HT.theta.equal = function(this.theta, T.function=T.nonparam){
+  
+  bootSample = T.boot(T.function, this.sample=sample)
+  check = quantile(bootSample, alpha/2) <= this.theta & this.theta <= quantile(bootSample, 1-alpha/2)
+  ifelse(check, "H0: Non-rejected", "H0: Rejected")
+}
+ 
+HT.satisfied = HT.theta.equal(0.125)
+HT.rejected = HT.theta.equal(0.30) # threshold is 0.29
 ```
-
-## Rejected
-
-```{r rejected}
-#TODO
-```
-
-
 
 # Coverage of confidence interval
-
 
 ```{r coverage}
 
@@ -213,12 +224,9 @@ B = 1000  # Iterations
 
 # On ne fait pas l'iterated dans le coverage
 
-cover = function(confidence){
-  (confidence$low <= theta & theta <= confidence$upp)
-}
+cover = function(confidence) (confidence$low <= theta & theta <= confidence$upp)
 
-clusterExport(cl, c("M", "B", "cover", "T.boot", 
-                    "CI.asym.param", "CI.asym.nonparam", "CI.basic", "CI.percent", "CI.student"))
+clusterExport(cl, c("M", "B", "cover", "CI.asym.param", "CI.asym.nonparam", "CI.basic", "CI.percent", "CI.student"))
 
 coverage.and.distance = (function(){
   coverage = data.frame(); distance = data.frame()
@@ -235,7 +243,7 @@ coverage.and.distance = (function(){
       newSample.T.param = T.param(newSample)
       newSample.T.nonparam = T.nonparam(newSample)
       
-      # T.nonparam = on utilise sample() au lieu de rgeom()
+      # this.sample = on utilise sample() au lieu de rgeom()
       # Devrait-on aussi passer par rgeom??
       newSample.boot.T = T.boot(T.nonparam, this.sample = newSample)
       
