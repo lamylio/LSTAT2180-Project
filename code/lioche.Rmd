@@ -10,9 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r setup}
-library(dplyr)
-library(ggplot2)
-
 set.seed(1)
 opt.digits = 4
 
@@ -204,12 +201,32 @@ CI.iterated.nonparam = CI.iterated(T.nonparam, sampleFunction = sample(sample, n
 HT.theta.equal = function(this.theta, T.function=T.nonparam){
   
   bootSample = T.boot(T.function, this.sample=sample)
-  check = quantile(bootSample, alpha/2) <= this.theta & this.theta <= quantile(bootSample, 1-alpha/2)
+  check = abs(mean(bootSample - this.theta)) 
+  #check = quantile(bootSample, alpha/2) <= this.theta & this.theta <= quantile(bootSample, 1-alpha/2)
+  ifelse(check <= alpha/2, "H0: Non-rejected", "H0: Rejected")
+}
+
+HT.theta.quantile = function(this.sample){
+  
+  bootSample = T.boot(T.nonparam, this.sample=this.sample)
+  
+  check = sample.T.nonparam >= quantile(bootSample, alpha/2) & sample.T.nonparam <= quantile(bootSample, 1-alpha/2)
+  ifelse(check, "H0: Non-rejected", "H0: Rejected")
+}
+
+HT.theta.normal = function(this.theta, this.sample){
+  bootSample = T.boot(T.nonparam, this.sample=this.sample)
+  
+  check = abs(
+    (mean(bootSample)-this.theta)
+    /
+    (sd(bootSample)*sqrt(length(this.sample)))
+    ) <= 1.96
   ifelse(check, "H0: Non-rejected", "H0: Rejected")
 }
  
 HT.satisfied = HT.theta.equal(0.125)
-HT.rejected = HT.theta.equal(0.30) # threshold is 0.29
+HT.rejected = HT.theta.equal(0.25)
 ```
 
 # Coverage of confidence interval
