@@ -18,24 +18,29 @@ p = 0.5
 M = 50000
 
 alpha = 0.05
-theta = pgeom(2, 0.5, lower.tail = F) # >2 = 0.125
+theta = pgeom(2, 0.5, lower.tail = F) # 0.125
 
-# J'ai ajouté une correction de bias à l'estimateur de p, et à T.param
-p.estim = function(obs){ph = (1/(mean(obs)+1)); ph-(ph*(1-ph))/length(obs)}
-T.param = function(obs){return (round((1 - p.estim(obs) )^3, 4))}
+
+# J'ai ajouté une correction de biais à l'estimateur de p, et à T.param
+# Ca semble donner des résultats légérement mieux donc je l'active par défaut.
+
+p.estim = function(obs){1/(mean(obs)+1)}
+p.estim.corrected = function(obs){ph = p.estim(obs); ph-(ph*(1-ph))/length(obs)}
+
+T.param = function(obs, corrected=T){return (round((1 - ifelse(corrected, p.estim.corrected(obs), p.estim(obs)) )^3, 4))}
 T.nonparam = function(obs){return (round(sum(obs>=3)/length(obs), 4))}
 
 sample = rgeom(n=30, prob=0.5)
 sample.distribution = prop.table(table(sample))
 
 sample.mu = mean(sample)
-sample.p = p.estim(sample)
+sample.p = p.estim.corrected(sample)
 
 sample.T.param = T.param(sample)
 sample.T.nonparam = T.nonparam(sample)
 
 # ---
-export.list = c("opt.digits", "sample", "n", "p", "M", "alpha", "theta", "sample.mu", "sample.p", "p.estim", "T.param", "T.nonparam", "sample.T.param", "sample.T.nonparam", "T.boot")
+export.list = c("opt.digits", "sample", "n", "p", "M", "alpha", "theta", "sample.mu", "sample.p", "p.estim","p.estim.corrected", "T.param", "T.nonparam", "sample.T.param", "sample.T.nonparam", "T.boot")
 
 ```
 
@@ -63,13 +68,35 @@ clusterExport(cl, export.list)
 
 ```{r boot}
 T.nonparam.boot = unlist(clusterCall(cl, T.boot, T.nonparam, this.sample=sample))
+T.nonparam.geom = unlist(clusterCall(cl, T.boot, T.nonparam, this.n=n))
 T.param.boot = unlist(clusterCall(cl, T.boot, T.param, this.n = n))
 ```
+
+# Distribution and ECDF plots
+```{r plots }
+x.seq = seq(0, max(sample), 1)
+(function(){
+  plot(x.seq, sample.distribution, pch=16, xlab = "", ylab = "")
+  lines(x.seq, sample.distribution, lwd=2)
+  points(x.seq, dgeom(x.seq, p), col="blue", pch=16)
+  lines(x.seq, dgeom(x.seq, p), col="blue", lwd=2)
+  axis(2, at = seq(-0.0, 1, 0.1))
+  title(main="Distribution of the sample vs real geometric", xlab = "Observed value", ylab="Proportion")
+})()
+
+(function (){
+  plot(ecdf(sample), verticals = T, pch = 16, lwd=2, xlim=c(0, 4), 
+       main="Empirical CDF vs real CDF", xlab="Observed value", ylab="Cumulative prop.")
+  plot(ecdf(rgeom(M, p)), verticals = T, lwd=2, pch = 16, col="blue", add=T)
+})()
+```
+
 
 
 # Bias and variance
 
 ```{r bias and variance}
+# I also checked with differents M
 bias.nonparam = round(mean(T.nonparam.boot - theta), opt.digits)
 bias.param = round(mean(T.param.boot - theta), opt.digits)
 
@@ -84,14 +111,18 @@ variance.param = variance(T.param.boot)
 ```{r normality check}
 # Graphically with barplots
 # Works also with plot(density())
+# or simply hist()
 
-barplot(table(T.nonparam.boot))
-barplot(table(T.param.boot))
+barplot(table(T.nonparam.boot), main=bquote("Barplot of" ~ T[n](chi)), ylab = "Frequency", xlab="Observed value")
 
 # Now in a QQPlot
 
-qqnorm(T.nonparam.boot); qqline(T.nonparam.boot, col=2)
-qqnorm(T.param.boot); qqline(T.param.boot, col=2)
+qqnorm(T.nonparam.boot, main=bquote("QQ Plot of" ~ T[n](chi))); qqline(T.nonparam.boot, col=2)
+
+# Shapiro
+shapiro.test(T.nonparam.boot[1:5000])
+shapiro.test(T.nonparam.boot[100001:105000])
+
 ```
 
 # Give a confidence interval
@@ -214,17 +245,6 @@ HT.theta.quantile = function(this.sample){
   ifelse(check, "H0: Non-rejected", "H0: Rejected")
 }
 
-HT.theta.normal = function(this.theta, this.sample){
-  bootSample = T.boot(T.nonparam, this.sample=this.sample)
-  
-  check = abs(
-    (mean(bootSample)-this.theta)
-    /
-    (sd(bootSample)*sqrt(length(this.sample)))
-    ) <= 1.96
-  ifelse(check, "H0: Non-rejected", "H0: Rejected")
-}
- 
 HT.satisfied = HT.theta.equal(0.125)
 HT.rejected = HT.theta.equal(0.25)
 ```
@@ -262,18 +282,20 @@ coverage.and.distance = (function(){
       
       # this.sample = on utilise sample() au lieu de rgeom()
       # Devrait-on aussi passer par rgeom??
-      newSample.boot.T = T.boot(T.nonparam, this.sample = newSample)
+      newSample.boot.T.nonparam = T.boot(T.nonparam, this.sample = newSample)
+      newSample.boot.T.param = T.boot(T.param, this.sample = newSample)
       
      # ---
       
       all = list(
         CI.asym.param(newSample.mu, n_i),
-        CI.asym.nonparam(newSample.T.nonparam, var(newSample.boot.T)),
-        CI.basic(newSample.boot.T, newSample.T.param),
-        CI.basic(newSample.boot.T, newSample.T.nonparam),
-        CI.percent(newSample.boot.T),
-        CI.student(newSample.boot.T, newSample.T.param, newSample, n_i),
-        CI.student(newSample.boot.T, newSample.T.nonparam, newSample, n_i)
+        CI.asym.nonparam(newSample.T.nonparam, var(newSample.boot.T.nonparam)),
+        CI.basic(newSample.boot.T.param, newSample.T.param),
+        CI.basic(newSample.boot.T.nonparam, newSample.T.nonparam),
+        CI.percent(newSample.boot.T.param),
+        CI.percent(newSample.boot.T.nonparam),
+        CI.student(newSample.boot.T.param, newSample.T.param, newSample, n_i),
+        CI.student(newSample.boot.T.nonparam, newSample.T.nonparam, newSample, n_i)
       )
       
       list(sapply(all, cover), sapply(all, function(ci) abs(ci$upp-ci$low)))
@@ -281,8 +303,8 @@ coverage.and.distance = (function(){
     coverage = rbind(coverage, rowMeans(sapply(1:B, function(i) unlist(coverage.loc[[i]][1])))*100)
     distance = rbind(distance, rowMeans(sapply(1:B, function(i) unlist(coverage.loc[[i]][2]))))
   }
-  colnames(coverage) = c("Asymp param", "Asym np", "Basic param", "Basic np", "Percent", "Student param", "Student np")
-  colnames(distance) = c("Asymp param", "Asym np", "Basic param", "Basic np", "Percent", "Student param", "Student np")
+  colnames(coverage) = c("Asymp param", "Asym np", "Basic param", "Basic np", "Percent param", "Percent np", "Student param", "Student np")
+  colnames(distance) = c("Asymp param", "Asym np", "Basic param", "Basic np", "Percent param", "Percent np", "Student param", "Student np")
   
   rownames(coverage) = m; rownames(distance) = m
   return(list(coverage=coverage, distance=distance))
