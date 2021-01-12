@@ -232,21 +232,23 @@ CI.iterated.nonparam = CI.iterated(T.nonparam, sampleFunction = sample(sample, n
 HT.theta.equal = function(this.theta, T.function=T.nonparam){
   
   bootSample = T.boot(T.function, this.sample=sample)
-  check = abs(mean(bootSample - this.theta)) 
-  #check = quantile(bootSample, alpha/2) <= this.theta & this.theta <= quantile(bootSample, 1-alpha/2)
-  ifelse(check <= alpha/2, "H0: Non-rejected", "H0: Rejected")
+  check = abs(mean(bootSample - this.theta)) <= alpha/2
+  ifelse(check, "H0: Non-rejected", "H0: Rejected")
 }
 
-HT.theta.quantile = function(this.sample){
+HT.theta.quantile = function(this.theta, this.sample=sample, T.function=T.nonparam){
   
-  bootSample = T.boot(T.nonparam, this.sample=this.sample)
+  bootSample = T.boot(T.function, this.sample = this.sample)
+  print(summary(bootSample))
+  hist(bootSample)
   
-  check = sample.T.nonparam >= quantile(bootSample, alpha/2) & sample.T.nonparam <= quantile(bootSample, 1-alpha/2)
+  check = quantile(bootSample, alpha/2) <= this.theta & this.theta <= quantile(bootSample, 1-alpha/2)
   ifelse(check, "H0: Non-rejected", "H0: Rejected")
 }
 
 HT.satisfied = HT.theta.equal(0.125)
-HT.rejected = HT.theta.equal(0.25)
+HT.satisfied.2 = HT.theta.quantile(this.theta=sample.T.nonparam)
+HT.rejected = HT.theta.quantile(this.theta=sample.T.nonparam, this.sample=sample+2)
 ```
 
 # Coverage of confidence interval
