@@ -69,6 +69,7 @@ clusterExport(cl, export.list)
 ```{r boot}
 T.nonparam.boot = unlist(clusterCall(cl, T.boot, T.nonparam, this.sample=sample))
 T.nonparam.geom = unlist(clusterCall(cl, T.boot, T.nonparam, this.n=n))
+
 T.param.boot = unlist(clusterCall(cl, T.boot, T.param, this.n = n))
 ```
 
@@ -184,8 +185,6 @@ CI.student.nonparam = CI.student(T.nonparam.boot, sample.T.nonparam)
 ## Iterated-T boostrap method
 
 ```{r iterated CI}
-# Est-ce que ça reviendrait pas au même que de directement sampler dans T.x.boot ? 
-
 # 15 secondes
 CI.iterated = function(T.function, sampleFunction, M=5000, M2 = 500){
   
@@ -241,7 +240,7 @@ HT.theta.quantile = function(this.theta, this.sample=sample, T.function=T.nonpar
   bootSample = T.boot(T.function, this.sample = this.sample)
   print(summary(bootSample))
   hist(bootSample)
-  
+  print(quantile(bootSample, c(alpha/2, 1-alpha/2)))
   check = quantile(bootSample, alpha/2) <= this.theta & this.theta <= quantile(bootSample, 1-alpha/2)
   ifelse(check, "H0: Non-rejected", "H0: Rejected")
 }
@@ -251,6 +250,13 @@ HT.satisfied.2 = HT.theta.quantile(this.theta=sample.T.nonparam)
 HT.rejected = HT.theta.quantile(this.theta=sample.T.nonparam, this.sample=sample+2)
 ```
 
+```{r}
+# sample+0.01
+# theta que je test ?? T(sample+0.0)
+```
+
+
+
 # Coverage of confidence interval
 
 ```{r coverage}
@@ -258,8 +264,8 @@ HT.rejected = HT.theta.quantile(this.theta=sample.T.nonparam, this.sample=sample
 m = c(10,20,50,100,500)
 
 # Attention: c'est "exponentiel", ça prend déjà ~30s
-M = 200 # Monte-Carlo
-B = 1000  # Iterations
+M = 5000 # Monte-Carlo
+B = 500  # Iterations
 
 # On ne fait pas l'iterated dans le coverage
 
@@ -276,26 +282,27 @@ coverage.and.distance = (function(){
       
       # Comme au devoir: on re-génère B échantillons réels
       newSample = rgeom(n_i, p)
+      print(length(newSample))
       newSample.mu = mean(newSample)
       
-      # Par contre je ne suis pas certain de quel estimateur je dois utiliser ? 
       newSample.T.param = T.param(newSample)
       newSample.T.nonparam = T.nonparam(newSample)
       
-      # this.sample = on utilise sample() au lieu de rgeom()
-      # Devrait-on aussi passer par rgeom??
       newSample.boot.T.nonparam = T.boot(T.nonparam, this.sample = newSample)
-      newSample.boot.T.param = T.boot(T.param, this.sample = newSample)
+      newSample.boot.T.param = T.boot(T.param, this.n=n_i)
       
      # ---
       
       all = list(
         CI.asym.param(newSample.mu, n_i),
         CI.asym.nonparam(newSample.T.nonparam, var(newSample.boot.T.nonparam)),
+        
         CI.basic(newSample.boot.T.param, newSample.T.param),
         CI.basic(newSample.boot.T.nonparam, newSample.T.nonparam),
+        
         CI.percent(newSample.boot.T.param),
         CI.percent(newSample.boot.T.nonparam),
+        
         CI.student(newSample.boot.T.param, newSample.T.param, newSample, n_i),
         CI.student(newSample.boot.T.nonparam, newSample.T.nonparam, newSample, n_i)
       )
